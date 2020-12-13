@@ -1,0 +1,44 @@
+plugins {
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
+    id 'java-library'
+}
+
+dependencies {
+    api "org.graalvm.truffle:truffle-api:$graalVmVersion"
+    annotationProcessor "org.graalvm.truffle:truffle-dsl-processor:$graalVmVersion"
+
+    implementation 'com.jayway.jsonpath:json-path:2.5.0'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.6.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+}
+
+shadowJar {
+    dependencies {
+        exclude(dependency('org.graalvm.*:.*'))
+    }
+
+    // Relocate to prevent any version conflicts with anything else on the classpath
+    relocate 'com.jayway.jsonpath', 'com.koenv.gpjson.thirdparty.com.jayway.jsonpath'
+    relocate 'net.minidev', 'com.koenv.gpjson.thirdparty.net.minidev'
+    relocate 'org.objectweb', 'com.koenv.gpjson.thirdparty.org.objectweb'
+    relocate 'org.slf4j', 'com.koenv.gpjson.thirdparty.org.slf4j'
+}
+
+build.dependsOn(shadowJar)
+
+task copyToGraalVM(type: Copy) {
+    dependsOn shadowJar
+
+    from tasks.shadowJar.outputs.files.files
+
+    if (!project.hasProperty("graalVMDirectory")) {
+        throw new IllegalArgumentException("Missing 'graalVMDirectory' property")
+    }
+
+    into "${project.property("graalVMDirectory")}/jre/languages/gpjson"
+}
+
+test {
+    useJUnitPlatform()
+}

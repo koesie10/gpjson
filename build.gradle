@@ -1,0 +1,12 @@
+ext {
+    graalVmVersion = '20.3.0'
+}
+
+subprojects {
+    group 'com.koenv'
+    version '0.1-SNAPSHOT'
+
+    repositories {
+        mavenCentral()
+    }
+}
