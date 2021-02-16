@@ -26,64 +26,41 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.koenv.gpjson;
-
-import com.koenv.gpjson.gpu.CUDARuntime;
-import com.oracle.truffle.api.TruffleLanguage;
+package com.koenv.gpjson.gpu;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
-public class GPJSONContext {
-    private final TruffleLanguage.Env env;
-    private final CUDARuntime cudaRuntime;
-    private final GPJSONLibrary root;
+public final class FunctionBinding extends Binding {
 
-    private volatile boolean cudaInitialized = false;
-    private AtomicInteger moduleId = new AtomicInteger(0);
+    private final Type returnType;
 
-    private final List<Runnable> disposables = new ArrayList<>();
-
-    public GPJSONContext(TruffleLanguage.Env env) {
-        this.env = env;
-
-        this.cudaRuntime = new CUDARuntime(this, env);
-
-        this.root = new GPJSONLibrary(this);
+    private FunctionBinding(String name, ArrayList<Parameter> parameterList,
+                            Type returnType, boolean hasCxxMangledName) {
+        super(name, parameterList, hasCxxMangledName);
+        this.returnType = returnType;
     }
 
-    public TruffleLanguage.Env getEnv() {
-        return env;
+    public static FunctionBinding newCxxBinding(String name, ArrayList<Parameter> parameterList, Type returnType) {
+        return new FunctionBinding(name, parameterList, returnType, true);
     }
 
-    public CUDARuntime getCudaRuntime() {
-        return cudaRuntime;
+    public static FunctionBinding newCBinding(String name, ArrayList<Parameter> parameterList, Type returnType) {
+        return new FunctionBinding(name, parameterList, returnType, false);
     }
 
-    public GPJSONLibrary getRoot() {
-        return root;
+    @Override
+    public String toString() {
+        return super.toString() + " : " + returnType.toString().toLowerCase();
     }
 
-    public void addDisposable(Runnable disposable) {
-        disposables.add(disposable);
+    @Override
+    public String toNIDLString() {
+        return name + "(" + getNIDLParameterSignature() + "): " + returnType.toString().toLowerCase();
     }
 
-    public void dispose() {
-        for (Runnable runnable : disposables) {
-            runnable.run();
-        }
-    }
-
-    public boolean isCUDAInitialized() {
-        return cudaInitialized;
-    }
-
-    public void setCUDAInitialized() {
-        cudaInitialized = true;
-    }
-
-    public int getNextModuleId() {
-        return moduleId.incrementAndGet();
+    public String toNFISignature() {
+        return "(" + Arrays.stream(parameters).map(Parameter::toNFISignatureElement).collect(Collectors.joining(", ")) + "): " + returnType.getNFITypeName();
     }
 }

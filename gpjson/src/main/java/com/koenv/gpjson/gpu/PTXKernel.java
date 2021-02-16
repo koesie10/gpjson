@@ -26,64 +26,33 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.koenv.gpjson;
+package com.koenv.gpjson.gpu;
 
-import com.koenv.gpjson.gpu.CUDARuntime;
-import com.oracle.truffle.api.TruffleLanguage;
+class PTXKernel {
+    private final String ptxSource;
+    private final String kernelName;
+    private final String loweredKernelName;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class GPJSONContext {
-    private final TruffleLanguage.Env env;
-    private final CUDARuntime cudaRuntime;
-    private final GPJSONLibrary root;
-
-    private volatile boolean cudaInitialized = false;
-    private AtomicInteger moduleId = new AtomicInteger(0);
-
-    private final List<Runnable> disposables = new ArrayList<>();
-
-    public GPJSONContext(TruffleLanguage.Env env) {
-        this.env = env;
-
-        this.cudaRuntime = new CUDARuntime(this, env);
-
-        this.root = new GPJSONLibrary(this);
+    PTXKernel(String ptxSource, String kernelName, String loweredKernelName) {
+        this.ptxSource = ptxSource;
+        this.kernelName = kernelName;
+        this.loweredKernelName = loweredKernelName;
     }
 
-    public TruffleLanguage.Env getEnv() {
-        return env;
+    public String getPtxSource() {
+        return ptxSource;
     }
 
-    public CUDARuntime getCudaRuntime() {
-        return cudaRuntime;
+    public String getKernelName() {
+        return kernelName;
     }
 
-    public GPJSONLibrary getRoot() {
-        return root;
+    public String getLoweredKernelName() {
+        return loweredKernelName;
     }
 
-    public void addDisposable(Runnable disposable) {
-        disposables.add(disposable);
-    }
-
-    public void dispose() {
-        for (Runnable runnable : disposables) {
-            runnable.run();
-        }
-    }
-
-    public boolean isCUDAInitialized() {
-        return cudaInitialized;
-    }
-
-    public void setCUDAInitialized() {
-        cudaInitialized = true;
-    }
-
-    public int getNextModuleId() {
-        return moduleId.incrementAndGet();
+    @Override
+    public String toString() {
+        return "PTXKernel(" + kernelName + "\n" + ptxSource + "\n)";
     }
 }

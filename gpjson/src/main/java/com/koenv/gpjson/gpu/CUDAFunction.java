@@ -26,64 +26,40 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.koenv.gpjson;
+package com.koenv.gpjson.gpu;
 
-import com.koenv.gpjson.gpu.CUDARuntime;
-import com.oracle.truffle.api.TruffleLanguage;
+import com.koenv.gpjson.GPJSONException;
+import com.koenv.gpjson.functions.Function;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+public final class CUDAFunction extends Function {
 
-public class GPJSONContext {
-    private final TruffleLanguage.Env env;
-    private final CUDARuntime cudaRuntime;
-    private final GPJSONLibrary root;
+    public interface Spec {
+        Object call(CUDARuntime cudaRuntime, Object[] args) throws InteropException, ArityException, UnsupportedTypeException;
 
-    private volatile boolean cudaInitialized = false;
-    private AtomicInteger moduleId = new AtomicInteger(0);
-
-    private final List<Runnable> disposables = new ArrayList<>();
-
-    public GPJSONContext(TruffleLanguage.Env env) {
-        this.env = env;
-
-        this.cudaRuntime = new CUDARuntime(this, env);
-
-        this.root = new GPJSONLibrary(this);
+        String getName();
     }
 
-    public TruffleLanguage.Env getEnv() {
-        return env;
+    private final Spec function;
+    private final CUDARuntime runtime;
+
+    public CUDAFunction(Spec function, CUDARuntime runtime) {
+        super(function.getName());
+        this.function = function;
+        this.runtime = runtime;
     }
 
-    public CUDARuntime getCudaRuntime() {
-        return cudaRuntime;
-    }
-
-    public GPJSONLibrary getRoot() {
-        return root;
-    }
-
-    public void addDisposable(Runnable disposable) {
-        disposables.add(disposable);
-    }
-
-    public void dispose() {
-        for (Runnable runnable : disposables) {
-            runnable.run();
+    @Override
+    @TruffleBoundary
+    protected Object call(Object[] arguments) throws ArityException, UnsupportedTypeException, UnsupportedMessageException {
+        try {
+            return function.call(runtime, arguments);
+        } catch (InteropException e) {
+            throw new GPJSONException(e);
         }
-    }
-
-    public boolean isCUDAInitialized() {
-        return cudaInitialized;
-    }
-
-    public void setCUDAInitialized() {
-        cudaInitialized = true;
-    }
-
-    public int getNextModuleId() {
-        return moduleId.incrementAndGet();
     }
 }

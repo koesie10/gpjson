@@ -26,64 +26,59 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.koenv.gpjson;
+package com.koenv.gpjson.gpu;
 
-import com.koenv.gpjson.gpu.CUDARuntime;
-import com.oracle.truffle.api.TruffleLanguage;
+import com.koenv.gpjson.GPJSONException;
+import com.oracle.truffle.api.CompilerDirectives;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+final class CUModule implements AutoCloseable {
+    private final CUDARuntime runtime;
 
-public class GPJSONContext {
-    private final TruffleLanguage.Env env;
-    private final CUDARuntime cudaRuntime;
-    private final GPJSONLibrary root;
+    private final String cubinFile;
+    /** Pointer to the native CUmodule object. */
+    private final long modulePointer;
 
-    private volatile boolean cudaInitialized = false;
-    private AtomicInteger moduleId = new AtomicInteger(0);
+    boolean closed = false;
 
-    private final List<Runnable> disposables = new ArrayList<>();
-
-    public GPJSONContext(TruffleLanguage.Env env) {
-        this.env = env;
-
-        this.cudaRuntime = new CUDARuntime(this, env);
-
-        this.root = new GPJSONLibrary(this);
+    CUModule(CUDARuntime runtime, String cubinFile, long modulePointer) {
+        this.runtime = runtime;
+        this.cubinFile = cubinFile;
+        this.modulePointer = modulePointer;
+        this.closed = false;
     }
 
-    public TruffleLanguage.Env getEnv() {
-        return env;
+    public long getModulePointer() {
+        if (closed) {
+            CompilerDirectives.transferToInterpreter();
+            throw new GPJSONException(String.format("cannot get module pointer, module (%016x) already closed", modulePointer));
+        }
+        return modulePointer;
     }
 
-    public CUDARuntime getCudaRuntime() {
-        return cudaRuntime;
+    public boolean isClosed() {
+        return closed;
     }
 
-    public GPJSONLibrary getRoot() {
-        return root;
-    }
-
-    public void addDisposable(Runnable disposable) {
-        disposables.add(disposable);
-    }
-
-    public void dispose() {
-        for (Runnable runnable : disposables) {
-            runnable.run();
+    @Override
+    public boolean equals(Object other) {
+        if (other instanceof CUModule) {
+            CUModule otherModule = (CUModule) other;
+            return otherModule.cubinFile.equals(cubinFile) && otherModule.closed == closed;
+        } else {
+            return false;
         }
     }
 
-    public boolean isCUDAInitialized() {
-        return cudaInitialized;
+    @Override
+    public int hashCode() {
+        return cubinFile.hashCode();
     }
 
-    public void setCUDAInitialized() {
-        cudaInitialized = true;
-    }
-
-    public int getNextModuleId() {
-        return moduleId.incrementAndGet();
+    @Override
+    public void close() {
+        if (!closed) {
+            runtime.cuModuleUnload(this);
+            closed = true;
+        }
     }
 }

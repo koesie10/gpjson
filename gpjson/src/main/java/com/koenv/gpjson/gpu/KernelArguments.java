@@ -26,64 +26,47 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.koenv.gpjson;
+package com.koenv.gpjson.gpu;
 
-import com.koenv.gpjson.gpu.CUDARuntime;
-import com.oracle.truffle.api.TruffleLanguage;
-
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
-public class GPJSONContext {
-    private final TruffleLanguage.Env env;
-    private final CUDARuntime cudaRuntime;
-    private final GPJSONLibrary root;
+final class KernelArguments implements Closeable {
 
-    private volatile boolean cudaInitialized = false;
-    private AtomicInteger moduleId = new AtomicInteger(0);
+    private final UnsafeHelper.PointerArray argumentArray;
+    private final List<Closeable> argumentValues = new ArrayList<>();
 
-    private final List<Runnable> disposables = new ArrayList<>();
-
-    public GPJSONContext(TruffleLanguage.Env env) {
-        this.env = env;
-
-        this.cudaRuntime = new CUDARuntime(this, env);
-
-        this.root = new GPJSONLibrary(this);
+    public KernelArguments(int numArgs) {
+        this.argumentArray = UnsafeHelper.createPointerArray(numArgs);
     }
 
-    public TruffleLanguage.Env getEnv() {
-        return env;
-    }
-
-    public CUDARuntime getCudaRuntime() {
-        return cudaRuntime;
-    }
-
-    public GPJSONLibrary getRoot() {
-        return root;
-    }
-
-    public void addDisposable(Runnable disposable) {
-        disposables.add(disposable);
-    }
-
-    public void dispose() {
-        for (Runnable runnable : disposables) {
-            runnable.run();
+    public KernelArguments(List<UnsafeHelper.MemoryObject> arguments) {
+        this.argumentArray = UnsafeHelper.createPointerArray(arguments.size());
+        for (int i = 0; i < arguments.size(); i++) {
+            setArgument(i, arguments.get(i));
         }
     }
 
-    public boolean isCUDAInitialized() {
-        return cudaInitialized;
+    public void setArgument(int argIdx, UnsafeHelper.MemoryObject obj) {
+        argumentArray.setValueAt(argIdx, obj.getAddress());
+        argumentValues.add(obj);
     }
 
-    public void setCUDAInitialized() {
-        cudaInitialized = true;
+    long getPointer() {
+        return argumentArray.getAddress();
     }
 
-    public int getNextModuleId() {
-        return moduleId.incrementAndGet();
+    @Override
+    public void close() {
+        this.argumentArray.close();
+        for (Closeable c : argumentValues) {
+            try {
+                c.close();
+            } catch (IOException e) {
+                /* ignored */
+            }
+        }
     }
 }

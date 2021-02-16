@@ -26,64 +26,34 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.koenv.gpjson;
+package com.koenv.gpjson.gpu;
 
-import com.koenv.gpjson.gpu.CUDARuntime;
-import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+public enum CUDADriverFunction {
+    CU_CTXCREATE("cuCtxCreate", "(pointer, uint32, sint32) :sint32"),
+    CU_CTXDESTROY("cuCtxDestroy", "(pointer): sint32"),
+    CU_CTXSYNCHRONIZE("cuCtxSynchronize", "(): sint32"),
+    CU_DEVICEGETCOUNT("cuDeviceGetCount", "(pointer): sint32"),
+    CU_DEVICEGET("cuDeviceGet", "(pointer, sint32): sint32"),
+    CU_DEVICEGETNAME("cuDeviceGetName", "(pointer, sint32, sint32): sint32"),
+    CU_DEVICEPRIMARYCTXRETAIN("cuDevicePrimaryCtxRetain", "(pointer, sint32): sint32"),
+    CU_INIT("cuInit", "(uint32): sint32"),
+    CU_LAUNCHKERNEL("cuLaunchKernel", "(uint64, uint32, uint32, uint32, uint32, uint32, uint32, uint32, uint64, pointer, pointer): sint32"),
+    CU_MODULELOAD("cuModuleLoad", "(pointer, string): sint32"),
+    CU_MODULELOADDATA("cuModuleLoadData", "(pointer, string): sint32"),
+    CU_MODULEUNLOAD("cuModuleUnload", "(uint64): sint32"),
+    CU_MODULEGETFUNCTION("cuModuleGetFunction", "(pointer, uint64, string): sint32");
 
-public class GPJSONContext {
-    private final TruffleLanguage.Env env;
-    private final CUDARuntime cudaRuntime;
-    private final GPJSONLibrary root;
+    private final String symbolName;
+    private final String signature;
 
-    private volatile boolean cudaInitialized = false;
-    private AtomicInteger moduleId = new AtomicInteger(0);
-
-    private final List<Runnable> disposables = new ArrayList<>();
-
-    public GPJSONContext(TruffleLanguage.Env env) {
-        this.env = env;
-
-        this.cudaRuntime = new CUDARuntime(this, env);
-
-        this.root = new GPJSONLibrary(this);
+    CUDADriverFunction(String symbolName, String nfiSignature) {
+        this.symbolName = symbolName;
+        this.signature = nfiSignature;
     }
 
-    public TruffleLanguage.Env getEnv() {
-        return env;
-    }
-
-    public CUDARuntime getCudaRuntime() {
-        return cudaRuntime;
-    }
-
-    public GPJSONLibrary getRoot() {
-        return root;
-    }
-
-    public void addDisposable(Runnable disposable) {
-        disposables.add(disposable);
-    }
-
-    public void dispose() {
-        for (Runnable runnable : disposables) {
-            runnable.run();
-        }
-    }
-
-    public boolean isCUDAInitialized() {
-        return cudaInitialized;
-    }
-
-    public void setCUDAInitialized() {
-        cudaInitialized = true;
-    }
-
-    public int getNextModuleId() {
-        return moduleId.incrementAndGet();
+    public Object getSymbol(CUDARuntime runtime) throws UnknownIdentifierException {
+        return runtime.getSymbol(CUDARuntime.CUDA_LIBRARY_NAME, symbolName, signature);
     }
 }

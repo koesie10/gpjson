@@ -26,64 +26,39 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.koenv.gpjson;
+package com.koenv.gpjson.gpu;
 
-import com.koenv.gpjson.gpu.CUDARuntime;
-import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+@ExportLibrary(InteropLibrary.class)
+public final class GPUPointer implements TruffleObject {
 
-public class GPJSONContext {
-    private final TruffleLanguage.Env env;
-    private final CUDARuntime cudaRuntime;
-    private final GPJSONLibrary root;
+    private final long rawPointer;
 
-    private volatile boolean cudaInitialized = false;
-    private AtomicInteger moduleId = new AtomicInteger(0);
-
-    private final List<Runnable> disposables = new ArrayList<>();
-
-    public GPJSONContext(TruffleLanguage.Env env) {
-        this.env = env;
-
-        this.cudaRuntime = new CUDARuntime(this, env);
-
-        this.root = new GPJSONLibrary(this);
+    public GPUPointer(long rawPointer) {
+        this.rawPointer = rawPointer;
     }
 
-    public TruffleLanguage.Env getEnv() {
-        return env;
+    public long getRawPointer() {
+        return rawPointer;
     }
 
-    public CUDARuntime getCudaRuntime() {
-        return cudaRuntime;
+    @Override
+    public String toString() {
+        return "GPUPointer(address=0x" + Long.toHexString(rawPointer);
     }
 
-    public GPJSONLibrary getRoot() {
-        return root;
+    @ExportMessage
+    @SuppressWarnings("static-method")
+    boolean isPointer() {
+        return true;
     }
 
-    public void addDisposable(Runnable disposable) {
-        disposables.add(disposable);
-    }
-
-    public void dispose() {
-        for (Runnable runnable : disposables) {
-            runnable.run();
-        }
-    }
-
-    public boolean isCUDAInitialized() {
-        return cudaInitialized;
-    }
-
-    public void setCUDAInitialized() {
-        cudaInitialized = true;
-    }
-
-    public int getNextModuleId() {
-        return moduleId.incrementAndGet();
+    @ExportMessage
+    long asPointer() {
+        return rawPointer;
     }
 }

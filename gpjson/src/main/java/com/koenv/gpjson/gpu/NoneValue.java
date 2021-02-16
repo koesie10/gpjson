@@ -26,64 +26,45 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.koenv.gpjson;
+package com.koenv.gpjson.gpu;
 
-import com.koenv.gpjson.gpu.CUDARuntime;
-import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+/**
+ * None is a singleton object that will always returned of a function or a member returns `void`.
+ * <p>
+ * This is to satisfy the post-condition in the Truffle call contract for invokeMember and execute,
+ * which states the the result type must be either a boxed primitive type or a TruffleObject.
+ */
+@ExportLibrary(InteropLibrary.class)
+public class NoneValue implements TruffleObject {
 
-public class GPJSONContext {
-    private final TruffleLanguage.Env env;
-    private final CUDARuntime cudaRuntime;
-    private final GPJSONLibrary root;
+    private static final NoneValue singleton = new NoneValue();
 
-    private volatile boolean cudaInitialized = false;
-    private AtomicInteger moduleId = new AtomicInteger(0);
-
-    private final List<Runnable> disposables = new ArrayList<>();
-
-    public GPJSONContext(TruffleLanguage.Env env) {
-        this.env = env;
-
-        this.cudaRuntime = new CUDARuntime(this, env);
-
-        this.root = new GPJSONLibrary(this);
+    public static NoneValue get() {
+        return singleton;
     }
 
-    public TruffleLanguage.Env getEnv() {
-        return env;
+    @Override
+    public String toString() {
+        return "NoneValue";
     }
 
-    public CUDARuntime getCudaRuntime() {
-        return cudaRuntime;
+    @Override
+    public int hashCode() {
+        return 123456789;
     }
 
-    public GPJSONLibrary getRoot() {
-        return root;
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof NoneValue;
     }
 
-    public void addDisposable(Runnable disposable) {
-        disposables.add(disposable);
-    }
-
-    public void dispose() {
-        for (Runnable runnable : disposables) {
-            runnable.run();
-        }
-    }
-
-    public boolean isCUDAInitialized() {
-        return cudaInitialized;
-    }
-
-    public void setCUDAInitialized() {
-        cudaInitialized = true;
-    }
-
-    public int getNextModuleId() {
-        return moduleId.incrementAndGet();
+    @ExportMessage
+    public boolean isNull() {
+        return true;
     }
 }

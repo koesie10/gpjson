@@ -26,64 +26,31 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.koenv.gpjson;
+package com.koenv.gpjson.gpu;
 
-import com.koenv.gpjson.gpu.CUDARuntime;
-import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.interop.TruffleObject;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
-public class GPJSONContext {
-    private final TruffleLanguage.Env env;
-    private final CUDARuntime cudaRuntime;
-    private final GPJSONLibrary root;
+public class ConfiguredKernel implements TruffleObject {
 
-    private volatile boolean cudaInitialized = false;
-    private AtomicInteger moduleId = new AtomicInteger(0);
+    private final Kernel kernel;
+    private final KernelConfig config;
 
-    private final List<Runnable> disposables = new ArrayList<>();
-
-    public GPJSONContext(TruffleLanguage.Env env) {
-        this.env = env;
-
-        this.cudaRuntime = new CUDARuntime(this, env);
-
-        this.root = new GPJSONLibrary(this);
+    public ConfiguredKernel(Kernel kernel, KernelConfig config) {
+        this.kernel = kernel;
+        this.config = config;
     }
 
-    public TruffleLanguage.Env getEnv() {
-        return env;
-    }
-
-    public CUDARuntime getCudaRuntime() {
-        return cudaRuntime;
-    }
-
-    public GPJSONLibrary getRoot() {
-        return root;
-    }
-
-    public void addDisposable(Runnable disposable) {
-        disposables.add(disposable);
-    }
-
-    public void dispose() {
-        for (Runnable runnable : disposables) {
-            runnable.run();
+    public void execute(List<UnsafeHelper.MemoryObject> arguments) {
+        kernel.incrementLaunchCount();
+        try (KernelArguments args = new KernelArguments(arguments)) {
+            kernel.getCudaRuntime().cuLaunchKernel(kernel, config, args);
         }
     }
 
-    public boolean isCUDAInitialized() {
-        return cudaInitialized;
-    }
-
-    public void setCUDAInitialized() {
-        cudaInitialized = true;
-    }
-
-    public int getNextModuleId() {
-        return moduleId.incrementAndGet();
+    @Override
+    public String toString() {
+        return "ConfiguredKernel(config=" + config + ", kernel=" + kernel + ')';
     }
 }
