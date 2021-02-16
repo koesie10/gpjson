@@ -67,13 +67,11 @@ public class QueryGPUFunction extends Function {
     private void discoverStructure(ManagedGPUMemory memory, int size) {
         Kernel kernel = context.getCudaRuntime().getKernel(GPJSONKernel.DISCOVER_STRUCTURE);
 
-        ConfiguredKernel configuredKernel = kernel.configure(new Dim3(1), new Dim3(128), 0);
-
         List<UnsafeHelper.MemoryObject> arguments = new ArrayList<>();
         arguments.add(UnsafeHelper.createPointerObject(memory.getView().getStartAddress()));
         arguments.add(UnsafeHelper.createInteger64Object(size));
 
-        configuredKernel.execute(arguments);
+        kernel.execute(new Dim3(1), new Dim3(128), 0, 0, arguments);
     }
 
     private void readFile(ManagedGPUMemory memory, Path file, long expectedSize) {

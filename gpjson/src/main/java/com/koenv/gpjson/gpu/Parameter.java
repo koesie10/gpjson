@@ -97,17 +97,12 @@ public class Parameter {
      *  paramStr :: = NFITypeName
      * </pre>
      *
-     * @param position zero-based position of the parameter in the parameter list
      * @param param string to be parsed in NIDL or legacy NFI syntax
      * @throws GPJSONException if {@code param} string cannot be parsed successfully
      * @return Parameter
      */
-    private static Parameter parseNIDLOrLegacyParameterString(int position, String param) throws GPJSONException {
+    private static Parameter parseNIDLParameterString(String param) throws GPJSONException {
         String paramStr = param.trim();
-        if (paramStr.indexOf(':') == -1) {
-            // no colon found -> attempt parsing it as a legacy NFI signature
-            return parseLegacyParameterString(position, paramStr);
-        }
         String[] nameAndType = paramStr.split(":");
         if (nameAndType.length != 2) {
             throw new GPJSONException("expected parameter as \"name: type\", got " + paramStr);
@@ -152,32 +147,11 @@ public class Parameter {
         }
     }
 
-    /**
-     * Parse parameter string in legacy NFI syntax.
-     *
-     * @param position zero-based position of the parameter in the parameter list
-     * @param param the string to be parsed
-     * @throws GPJSONException of the specified type cannot be parsed
-     * @return PArameter in which the names are "param1", "param2", ...
-     */
-    private static Parameter parseLegacyParameterString(int position, String param) throws GPJSONException {
-        String name = "param" + (position + 1);
-        Type type = Type.fromNIDLTypeString(param.trim());
-        assertNonVoidType(type, position, param);
-        return new Parameter(position, name, type, type == Type.NFI_POINTER ? Kind.POINTER_INOUT : Kind.BY_VALUE);
-    }
-
-    private static void assertNonVoidType(Type type, int position, String paramStr) throws GPJSONException {
-        if (type == Type.VOID) {
-            throw new GPJSONException("parameter " + (position + 1) + " has type void in " + paramStr);
-        }
-    }
-
     public static ArrayList<Parameter> parseParameterSignature(String parameterSignature) throws GPJSONException {
         CompilerAsserts.neverPartOfCompilation();
         ArrayList<Parameter> params = new ArrayList<>();
         for (String s : parameterSignature.trim().split(",")) {
-            params.add(parseNIDLOrLegacyParameterString(params.size(), s.trim()));
+            params.add(parseNIDLParameterString(s.trim()));
         }
         return params;
     }
@@ -204,70 +178,6 @@ public class Parameter {
 
     public int getPosition() {
         return position;
-    }
-
-    public String getMangledType() {
-        // Simple substitution rule for GCC
-        // Note that this does not implement the substitution rules
-        StringBuffer buf = new StringBuffer();
-        switch (kind) {
-            case POINTER_IN:
-                buf.append("PK");
-                break;
-            case POINTER_INOUT:
-            case POINTER_OUT:
-                buf.append("P");
-                break;
-            default:
-        }
-        buf.append(type.getMangled());
-        return buf.toString();
-    }
-
-    public String toNIDLSignatureElement() {
-        String pointerStr;
-        switch (kind) {
-            case POINTER_IN:
-                pointerStr = "in pointer ";
-                break;
-            case POINTER_INOUT:
-                pointerStr = "inout pointer ";
-                break;
-            case POINTER_OUT:
-                pointerStr = "out pointer ";
-                break;
-            default:
-                pointerStr = "";
-        }
-        return name + ": " + pointerStr + type.toString().toLowerCase();
-    }
-
-    public String toNFISignatureElement() {
-        switch (kind) {
-            case POINTER_IN:
-            case POINTER_INOUT:
-            case POINTER_OUT:
-                return "pointer";
-            default:
-                return type.getNFITypeName();
-        }
-    }
-
-    public boolean isSynonymousWithPointerTo(Type elementType) {
-        if (isPointer()) {
-            if (type == Type.NFI_POINTER) {
-                // NFI pointers are synonymous to everything
-                return true;
-            }
-            if (type == Type.VOID || elementType == Type.VOID) {
-                return true;
-            } else {
-                return type.isSynonymousWith(elementType);
-            }
-        } else {
-            // value type
-            return type.isSynonymousWith(elementType);
-        }
     }
 
     @Override

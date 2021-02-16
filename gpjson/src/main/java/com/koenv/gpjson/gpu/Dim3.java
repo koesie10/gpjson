@@ -28,8 +28,6 @@
  */
 package com.koenv.gpjson.gpu;
 
-import com.oracle.truffle.api.CompilerAsserts;
-
 import java.util.Arrays;
 
 public final class Dim3 {
@@ -67,7 +65,6 @@ public final class Dim3 {
 
     @Override
     public String toString() {
-        CompilerAsserts.neverPartOfCompilation();
         return "(" + dims[0] + ", " + dims[1] + ", " + dims[2] + ")";
     }
 

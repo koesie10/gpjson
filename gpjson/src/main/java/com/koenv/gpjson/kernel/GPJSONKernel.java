@@ -1,15 +1,15 @@
 package com.koenv.gpjson.kernel;
 
 public enum GPJSONKernel {
-    DISCOVER_STRUCTURE("discover_structure", "pointer, sint64", "com/koenv/gpjson/kernels/discover_structure.cu");
+    DISCOVER_STRUCTURE("discover_structure", "data: inout pointer char, n: sint64", "com/koenv/gpjson/kernels/discover_structure.cu");
 
     private final String name;
-    private final String nidlSignature;
+    private final String parameterSignature;
     private final String filename;
 
-    GPJSONKernel(String name, String nidlSignature, String filename) {
+    GPJSONKernel(String name, String parameterSignature, String filename) {
         this.name = name;
-        this.nidlSignature = nidlSignature;
+        this.parameterSignature = parameterSignature;
         this.filename = filename;
     }
 
@@ -17,8 +17,8 @@ public enum GPJSONKernel {
         return name;
     }
 
-    public String getNidlSignature() {
-        return nidlSignature;
+    public String getParameterSignature() {
+        return parameterSignature;
     }
 
     public String getFilename() {

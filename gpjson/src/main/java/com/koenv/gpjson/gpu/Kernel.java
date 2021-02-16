@@ -30,14 +30,11 @@ package com.koenv.gpjson.gpu;
 
 import com.koenv.gpjson.GPJSONException;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.library.ExportLibrary;
 
 import java.util.Arrays;
 import java.util.List;
 
-@ExportLibrary(InteropLibrary.class)
 public final class Kernel implements TruffleObject {
 
     private final CUDARuntime cudaRuntime;
@@ -123,8 +120,10 @@ public final class Kernel implements TruffleObject {
         return launchCount;
     }
 
-    public ConfiguredKernel configure(Dim3 gridSize, Dim3 blockSize, int dynamicSharedMemoryBytes) {
-        KernelConfig config = new KernelConfig(gridSize, blockSize, dynamicSharedMemoryBytes);
-        return new ConfiguredKernel(this, config);
+    public void execute(Dim3 gridSize, Dim3 blockSize, int dynamicSharedMemoryBytes, int stream, List<UnsafeHelper.MemoryObject> arguments) {
+        incrementLaunchCount();
+        try (KernelArguments args = new KernelArguments(arguments)) {
+            cudaRuntime.cuLaunchKernel(this, gridSize, blockSize, dynamicSharedMemoryBytes, stream, args);
+        }
     }
 }

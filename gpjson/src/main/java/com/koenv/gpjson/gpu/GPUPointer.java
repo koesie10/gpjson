@@ -28,12 +28,8 @@
  */
 package com.koenv.gpjson.gpu;
 
-import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
 
-@ExportLibrary(InteropLibrary.class)
 public final class GPUPointer implements TruffleObject {
 
     private final long rawPointer;
@@ -49,16 +45,5 @@ public final class GPUPointer implements TruffleObject {
     @Override
     public String toString() {
         return "GPUPointer(address=0x" + Long.toHexString(rawPointer);
-    }
-
-    @ExportMessage
-    @SuppressWarnings("static-method")
-    boolean isPointer() {
-        return true;
-    }
-
-    @ExportMessage
-    long asPointer() {
-        return rawPointer;
     }
 }

@@ -212,7 +212,7 @@ public class CUDARuntime {
         CUModule module = cuModuleLoadData(ptx.getPtxSource(), moduleName);
         long kernelFunctionHandle = cuModuleGetFunction(module, ptx.getLoweredKernelName());
 
-        return new Kernel(this, kernelType.getName(), ptx.getLoweredKernelName(), kernelFunctionHandle, kernelType.getNidlSignature(), module, ptx.getPtxSource());
+        return new Kernel(this, kernelType.getName(), ptx.getLoweredKernelName(), kernelFunctionHandle, kernelType.getParameterSignature(), module, ptx.getPtxSource());
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -284,12 +284,9 @@ public class CUDARuntime {
         }
     }
 
-    @CompilerDirectives.TruffleBoundary
-    public void cuLaunchKernel(Kernel kernel, KernelConfig config, KernelArguments args) {
+    public void cuLaunchKernel(Kernel kernel, Dim3 gridSize, Dim3 blockSize, int dynamicSharedMemoryBytes, int stream, KernelArguments args) {
         try {
             Object callable = CUDADriverFunction.CU_LAUNCHKERNEL.getSymbol(this);
-            Dim3 gridSize = config.getGridSize();
-            Dim3 blockSize = config.getBlockSize();
             Object result = INTEROP.execute(callable,
                     kernel.getKernelFunctionHandle(),
                     gridSize.getX(),
@@ -298,8 +295,8 @@ public class CUDARuntime {
                     blockSize.getX(),
                     blockSize.getY(),
                     blockSize.getZ(),
-                    config.getDynamicSharedMemoryBytes(),
-                    config.getStream(),
+                    dynamicSharedMemoryBytes,
+                    stream,
                     args.getPointer(),              // pointer to kernel arguments array
                     0                               // extra args
             );
@@ -430,17 +427,6 @@ public class CUDARuntime {
             CompilerDirectives.transferToInterpreter();
             throw new GPJSONException(returnCode, cudaGetErrorString(returnCode), function);
         }
-    }
-
-    /**
-     * Get function as callable from native library.
-     *
-     * @param binding function binding
-     * @return a callable as a TruffleObject
-     */
-    @CompilerDirectives.TruffleBoundary
-    public Object getSymbol(FunctionBinding binding) throws UnknownIdentifierException {
-        return getSymbol(binding.getLibraryFileName(), binding.getSymbolName(), binding.toNFISignature(), "");
     }
 
     /**
