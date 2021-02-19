@@ -2,6 +2,11 @@ package com.koenv.gpjson.functions;
 
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.ReadContext;
+import com.jayway.jsonpath.internal.Path;
+import com.jayway.jsonpath.internal.path.CompiledPath;
+import com.jayway.jsonpath.internal.path.PathCompiler;
+import com.jayway.jsonpath.internal.path.PathToken;
+import com.jayway.jsonpath.internal.path.RootPathToken;
 import com.koenv.gpjson.GPJSONException;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
@@ -11,6 +16,7 @@ import net.minidev.json.JSONAwareEx;
 import net.minidev.json.JSONStyle;
 
 import java.io.File;
+import java.lang.reflect.Field;
 
 public class QueryFunction extends Function {
     public QueryFunction() {
@@ -36,6 +42,29 @@ public class QueryFunction extends Function {
             path = JsonPath.compile(query);
         } catch (Exception e) {
             throw new GPJSONException("Failed to parse JSON path", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+        }
+
+        CompiledPath jsonPath = (CompiledPath) PathCompiler.compile(query);
+
+        System.out.println(jsonPath.isDefinite());
+
+        try {
+            Field rootField = CompiledPath.class.getDeclaredField("root");
+            rootField.setAccessible(true);
+
+            RootPathToken token = (RootPathToken) rootField.get(jsonPath);
+
+            Field nextField = PathToken.class.getDeclaredField("next");
+            nextField.setAccessible(true);
+
+            PathToken next = token;
+            while (next != null) {
+                System.out.printf("%s: %s%n", next, next.getClass().getName());
+
+                next = (PathToken) nextField.get(next);
+            }
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            e.printStackTrace();
         }
 
         Object result;

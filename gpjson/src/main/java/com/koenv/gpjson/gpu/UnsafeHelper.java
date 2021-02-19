@@ -33,16 +33,20 @@ import sun.misc.Unsafe;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Field;
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 public class UnsafeHelper {
     private static final Unsafe unsafe;
+    private static final long bufferAddressOffset;
 
     static {
         try {
             Field f = Unsafe.class.getDeclaredField("theUnsafe");
             f.setAccessible(true);
             unsafe = (Unsafe) f.get(null);
+            bufferAddressOffset = unsafe.objectFieldOffset(Buffer.class.getDeclaredField("address"));
         } catch (NoSuchFieldException | IllegalAccessException e) {
             // this needs to be a RuntimeException since it is raised during static initialization
             throw new RuntimeException(e);
@@ -103,6 +107,12 @@ public class UnsafeHelper {
         return new ByteArray(numElements);
     }
 
+    public static ByteArray createByteArray(ByteBuffer byteBuffer) {
+        long address = unsafe.getLong(byteBuffer, bufferAddressOffset);
+
+        return new ByteArray(address, byteBuffer.capacity());
+    }
+
     public static PointerArray createPointerArray(int numElements) {
         return new PointerArray(numElements);
     }
@@ -149,6 +159,11 @@ public class UnsafeHelper {
 
         ByteArray(int numElements) {
             super(unsafe.allocateMemory(numElements));
+            this.numElements = numElements;
+        }
+
+        ByteArray(long address, int numElements) {
+            super(address);
             this.numElements = numElements;
         }
 

@@ -48,7 +48,7 @@ public class QueryGPUFunction extends Function {
             throw new GPJSONException("Failed to get size of file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         }
 
-        try (ManagedGPUMemory memory = context.getCudaRuntime().allocateMemory(size)) {
+        try (ManagedGPUPointer memory = context.getCudaRuntime().allocateUnmanagedMemory(size)) {
             readFile(memory, file, size);
 
             long end = System.nanoTime();
@@ -64,25 +64,24 @@ public class QueryGPUFunction extends Function {
         return "test";
     }
 
-    private void discoverStructure(ManagedGPUMemory memory, int size) {
+    private void discoverStructure(ManagedGPUPointer memory, int size) {
         Kernel kernel = context.getCudaRuntime().getKernel(GPJSONKernel.DISCOVER_STRUCTURE);
 
         List<UnsafeHelper.MemoryObject> arguments = new ArrayList<>();
-        arguments.add(UnsafeHelper.createPointerObject(memory.getView().getStartAddress()));
+        arguments.add(UnsafeHelper.createPointerObject(memory.getPointer().getRawPointer()));
         arguments.add(UnsafeHelper.createInteger64Object(size));
 
         kernel.execute(new Dim3(1), new Dim3(128), 0, 0, arguments);
     }
 
-    private void readFile(ManagedGPUMemory memory, Path file, long expectedSize) {
+    private void readFile(ManagedGPUPointer memory, Path file, long expectedSize) {
         ByteBuffer buffer = ByteBuffer.allocateDirect(FILE_READ_BUFFER);
+        UnsafeHelper.ByteArray byteArray = UnsafeHelper.createByteArray(buffer);
 
         try (FileChannel channel = FileChannel.open(file);) {
             if (channel.size() != expectedSize) {
                 throw new GPJSONException("Size of file has changed while reading");
             }
-
-            UnsafeHelper.ByteArray byteArray = UnsafeHelper.createByteArray(FILE_READ_BUFFER);
 
             long offset = 0;
 
@@ -98,11 +97,7 @@ public class QueryGPUFunction extends Function {
                     throw new GPJSONException("Size of file has changed while reading");
                 }
 
-                for (int i = 0; i < numBytes; i++) {
-                    byteArray.setValueAt(i, buffer.get(i));
-                }
-
-                context.getCudaRuntime().cudaMemcpy(memory.getView().getStartAddress() + offset, byteArray.getAddress(), numBytes, CUDAMemcpyKind.HOST_TO_DEVICE);
+                context.getCudaRuntime().cudaMemcpy(memory.getPointer().getRawPointer() + offset, byteArray.getAddress(), numBytes, CUDAMemcpyKind.HOST_TO_DEVICE);
 
                 offset += numBytes;
             }

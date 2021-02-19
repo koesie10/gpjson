@@ -106,6 +106,10 @@ public class CUDARuntime {
         return new ManagedGPUMemory(this, cudaMallocManaged(numBytes));
     }
 
+    public ManagedGPUPointer allocateUnmanagedMemory(long numBytes) {
+        return new ManagedGPUPointer(this, cudaMalloc(numBytes));
+    }
+
     @CompilerDirectives.TruffleBoundary
     public GPUPointer cudaMalloc(long numBytes) {
         try (UnsafeHelper.PointerObject outPointer = UnsafeHelper.createPointerObject()) {
