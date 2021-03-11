@@ -31,6 +31,7 @@ package com.koenv.gpjson;
 import com.koenv.gpjson.functions.Function;
 import com.koenv.gpjson.functions.QueryFunction;
 import com.koenv.gpjson.functions.QueryGPUFunction;
+import com.koenv.gpjson.functions.UnsafeGetCUDARuntimeFunction;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -38,15 +39,20 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.TreeMap;
 
 @ExportLibrary(InteropLibrary.class)
 public class GPJSONLibrary implements TruffleObject {
     private final TreeMap<String, Object> map = new TreeMap<>();
 
+    private final UnsafeGetCUDARuntimeFunction unsafeGetCUDARuntimeFunction;
+
     public GPJSONLibrary(GPJSONContext context) {
         this.map.put("query", new QueryFunction());
         this.map.put("queryGPU", new QueryGPUFunction(context));
+
+        unsafeGetCUDARuntimeFunction = new UnsafeGetCUDARuntimeFunction(context.getCudaRuntime());
     }
 
     @ExportMessage
@@ -85,6 +91,11 @@ public class GPJSONLibrary implements TruffleObject {
     @ExportMessage
     public Object invokeMember(String member, Object[] arguments, @CachedLibrary(limit = "2") InteropLibrary callLibrary)
             throws UnsupportedMessageException, ArityException, UnknownIdentifierException, UnsupportedTypeException {
+        // This is used for retrieving the CUDARuntime in tests
+        if (Objects.equals(member, "UNSAFE_getCUDARuntime")) {
+            return callLibrary.execute(unsafeGetCUDARuntimeFunction, arguments);
+        }
+
         return callLibrary.execute(readMember(member), arguments);
     }
 

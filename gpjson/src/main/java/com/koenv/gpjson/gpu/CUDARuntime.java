@@ -107,7 +107,11 @@ public class CUDARuntime {
     }
 
     public ManagedGPUPointer allocateUnmanagedMemory(long numBytes) {
-        return new ManagedGPUPointer(this, cudaMalloc(numBytes));
+        return new ManagedGPUPointer(this, cudaMalloc(numBytes), numBytes);
+    }
+
+    public ManagedGPUPointer allocateUnmanagedMemory(long numElements, Type type) {
+        return allocateUnmanagedMemory(numElements * type.getSizeBytes());
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -203,7 +207,7 @@ public class CUDARuntime {
         String code;
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(kernelType.getFilename())) {
             if (is == null) {
-                throw new GPJSONException("Missing kernel code file");
+                throw new GPJSONException("Missing kernel code file " + kernelType.getFilename());
             }
 
             code = new BufferedReader(new InputStreamReader(is)).lines().collect(Collectors.joining("\n"));

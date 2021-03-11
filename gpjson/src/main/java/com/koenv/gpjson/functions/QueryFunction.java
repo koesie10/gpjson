@@ -2,7 +2,6 @@ package com.koenv.gpjson.functions;
 
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.ReadContext;
-import com.jayway.jsonpath.internal.Path;
 import com.jayway.jsonpath.internal.path.CompiledPath;
 import com.jayway.jsonpath.internal.path.PathCompiler;
 import com.jayway.jsonpath.internal.path.PathToken;

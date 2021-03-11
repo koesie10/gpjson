@@ -67,6 +67,14 @@ public class UnsafeHelper {
         return pointer;
     }
 
+    public static PointerObject createPointerObject(GPUPointer pointer) {
+        return createPointerObject(pointer.getRawPointer());
+    }
+
+    public static PointerObject createPointerObject(ManagedGPUPointer pointer) {
+        return createPointerObject(pointer.getPointer());
+    }
+
     public static Integer8Object createInteger8Object() {
         return new Integer8Object();
     }

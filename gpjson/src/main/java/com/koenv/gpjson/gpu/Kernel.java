@@ -29,11 +29,13 @@
 package com.koenv.gpjson.gpu;
 
 import com.koenv.gpjson.GPJSONException;
+import com.koenv.gpjson.util.FormatUtil;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.TruffleObject;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public final class Kernel implements TruffleObject {
 
@@ -120,10 +122,19 @@ public final class Kernel implements TruffleObject {
         return launchCount;
     }
 
+    public void execute(Dim3 gridSize, Dim3 blockSize, int dynamicSharedMemoryBytes, int stream, UnsafeHelper.MemoryObject... arguments) {
+        execute(gridSize, blockSize, dynamicSharedMemoryBytes, stream, Arrays.asList(arguments));
+    }
+
     public void execute(Dim3 gridSize, Dim3 blockSize, int dynamicSharedMemoryBytes, int stream, List<UnsafeHelper.MemoryObject> arguments) {
+        long start = System.nanoTime();
         incrementLaunchCount();
         try (KernelArguments args = new KernelArguments(arguments)) {
             cudaRuntime.cuLaunchKernel(this, gridSize, blockSize, dynamicSharedMemoryBytes, stream, args);
         }
+        long end = System.nanoTime();
+
+        long duration = end - start;
+        System.out.printf("Ran %s in %dms%n", kernelName, TimeUnit.NANOSECONDS.toMillis(duration));
     }
 }

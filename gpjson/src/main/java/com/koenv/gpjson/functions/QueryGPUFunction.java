@@ -2,8 +2,11 @@ package com.koenv.gpjson.functions;
 
 import com.koenv.gpjson.GPJSONContext;
 import com.koenv.gpjson.GPJSONException;
-import com.koenv.gpjson.gpu.*;
-import com.koenv.gpjson.kernel.GPJSONKernel;
+import com.koenv.gpjson.gpu.CUDAMemcpyKind;
+import com.koenv.gpjson.gpu.ManagedGPUPointer;
+import com.koenv.gpjson.gpu.UnsafeHelper;
+import com.koenv.gpjson.stages.NewlineIndex;
+import com.koenv.gpjson.stages.StringIndex;
 import com.koenv.gpjson.util.FormatUtil;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
@@ -16,8 +19,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class QueryGPUFunction extends Function {
@@ -58,20 +59,37 @@ public class QueryGPUFunction extends Function {
 
             System.out.printf("Reading file done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
-            discoverStructure(memory, (int) size);
+            start = System.nanoTime();
+
+            NewlineIndex newlineIndexCreator = new NewlineIndex(context.getCudaRuntime(), memory);
+            long[] newlineIndex = newlineIndexCreator.create();
+
+            end = System.nanoTime();
+            duration = end - start;
+            durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
+            speed = size / durationSeconds;
+
+            System.out.printf("Creating newline index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+            // System.out.println(Arrays.toString(newlineIndex));
+            System.out.println(newlineIndex.length);
+
+            start = System.nanoTime();
+
+            StringIndex stringIndexCreator = new StringIndex(context.getCudaRuntime(), memory);
+
+            try (ManagedGPUPointer stringIndex = stringIndexCreator.create()) {
+                // TODO: Use the string index
+            }
+
+            end = System.nanoTime();
+            duration = end - start;
+            durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
+            speed = size / durationSeconds;
+
+            System.out.printf("Creating string index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
         }
 
         return "test";
-    }
-
-    private void discoverStructure(ManagedGPUPointer memory, int size) {
-        Kernel kernel = context.getCudaRuntime().getKernel(GPJSONKernel.DISCOVER_STRUCTURE);
-
-        List<UnsafeHelper.MemoryObject> arguments = new ArrayList<>();
-        arguments.add(UnsafeHelper.createPointerObject(memory.getPointer().getRawPointer()));
-        arguments.add(UnsafeHelper.createInteger64Object(size));
-
-        kernel.execute(new Dim3(1), new Dim3(128), 0, 0, arguments);
     }
 
     private void readFile(ManagedGPUPointer memory, Path file, long expectedSize) {

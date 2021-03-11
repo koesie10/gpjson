@@ -1,0 +1,1 @@
+This is outside of a string while "this is inside of a string".\", this is a second line that \"will" help or not help, depending on the context of \"this string"
