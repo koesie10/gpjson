@@ -7,6 +7,7 @@ import com.koenv.gpjson.gpu.ManagedGPUPointer;
 import com.koenv.gpjson.gpu.UnsafeHelper;
 import com.koenv.gpjson.stages.NewlineIndex;
 import com.koenv.gpjson.stages.StringIndex;
+import com.koenv.gpjson.stages.StructuralIndex;
 import com.koenv.gpjson.util.FormatUtil;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
@@ -78,15 +79,28 @@ public class QueryGPUFunction extends Function {
             StringIndex stringIndexCreator = new StringIndex(context.getCudaRuntime(), memory);
 
             try (ManagedGPUPointer stringIndex = stringIndexCreator.create()) {
-                // TODO: Use the string index
+                end = System.nanoTime();
+                duration = end - start;
+                durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
+                speed = size / durationSeconds;
+
+                System.out.printf("Creating string index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+
+                start = System.nanoTime();
+
+                StructuralIndex structuralIndexCreator = new StructuralIndex(context.getCudaRuntime(), memory, stringIndex);
+
+                try (ManagedGPUPointer structuralIndex = structuralIndexCreator.create()) {
+                    end = System.nanoTime();
+                    duration = end - start;
+                    durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
+                    speed = size / durationSeconds;
+
+                    System.out.printf("Creating structural index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+
+                    // TODO: Use structural index
+                }
             }
-
-            end = System.nanoTime();
-            duration = end - start;
-            durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
-            speed = size / durationSeconds;
-
-            System.out.printf("Creating string index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
         }
 
         return "test";

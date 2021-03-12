@@ -49,9 +49,9 @@ public class StringIndex {
         Kernel kernel = cudaRuntime.getKernel(GPJSONKernel.CREATE_ESCAPE_CARRY_INDEX);
 
         List<UnsafeHelper.MemoryObject> arguments = new ArrayList<>();
-        arguments.add(UnsafeHelper.createPointerObject(fileMemory.getPointer().getRawPointer()));
+        arguments.add(UnsafeHelper.createPointerObject(fileMemory));
         arguments.add(UnsafeHelper.createInteger64Object(fileMemory.size()));
-        arguments.add(UnsafeHelper.createPointerObject(carryIndexMemory.getPointer().getRawPointer()));
+        arguments.add(UnsafeHelper.createPointerObject(carryIndexMemory));
 
         kernel.execute(new Dim3(GRID_SIZE), new Dim3(BLOCK_SIZE), 0, 0, arguments);
     }
