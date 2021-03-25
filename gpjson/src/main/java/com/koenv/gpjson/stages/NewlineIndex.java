@@ -21,6 +21,7 @@ public class NewlineIndex {
     }
 
     public long[] create() {
+        cudaRuntime.timings.start("NewlineIndex#create");
         try (ManagedGPUPointer countMemory = cudaRuntime.allocateUnmanagedMemory(COUNT_INDEX_SIZE, Type.SINT32)) {
             countNewlines(countMemory);
             int sum = createOffsetsIndex(countMemory);
@@ -28,6 +29,8 @@ public class NewlineIndex {
             try (ManagedGPUPointer indexMemory = cudaRuntime.allocateUnmanagedMemory(sum, Type.SINT64)) {
                 return createIndex(sum, countMemory, indexMemory);
             }
+        } finally {
+            cudaRuntime.timings.end();
         }
     }
 
@@ -43,6 +46,8 @@ public class NewlineIndex {
     }
 
     int createOffsetsIndex(ManagedGPUPointer countMemory) {
+        cudaRuntime.timings.start("NewlineIndex#createOffsetsIndex");
+
         ByteBuffer indexCountBuffer = countMemory.copyToHost();
 
         int sum = 0;
@@ -57,6 +62,8 @@ public class NewlineIndex {
         }
 
         countMemory.loadFrom(indexCountBuffer);
+
+        cudaRuntime.timings.end();
 
         return sum;
     }

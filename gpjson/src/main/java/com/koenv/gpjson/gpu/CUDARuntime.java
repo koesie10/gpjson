@@ -30,6 +30,7 @@ package com.koenv.gpjson.gpu;
 
 import com.koenv.gpjson.GPJSONContext;
 import com.koenv.gpjson.GPJSONException;
+import com.koenv.gpjson.debug.Timings;
 import com.koenv.gpjson.kernel.GPJSONKernel;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -69,6 +70,8 @@ public class CUDARuntime {
 
     private final GPJSONContext context;
     private final NVRuntimeCompiler nvrtc;
+
+    public final Timings timings = new Timings();
 
     public CUDARuntime(GPJSONContext context, TruffleLanguage.Env env) {
         this.context = context;
@@ -116,6 +119,7 @@ public class CUDARuntime {
 
     @CompilerDirectives.TruffleBoundary
     public GPUPointer cudaMalloc(long numBytes) {
+        timings.start("cudaMalloc");
         try (UnsafeHelper.PointerObject outPointer = UnsafeHelper.createPointerObject()) {
             Object callable = CUDARuntimeFunction.CUDA_MALLOC.getSymbol(this);
             Object result = INTEROP.execute(callable, outPointer.getAddress(), numBytes);
@@ -124,11 +128,14 @@ public class CUDARuntime {
             return new GPUPointer(addressAllocatedMemory);
         } catch (InteropException e) {
             throw new GPJSONException(e);
+        } finally {
+            timings.end();
         }
     }
 
     @CompilerDirectives.TruffleBoundary
     public LittleEndianNativeArrayView cudaMallocManaged(long numBytes) {
+        timings.start("cudaMallocManaged");
         final int cudaMemAttachGlobal = 0x01;
         try (UnsafeHelper.PointerObject outPointer = UnsafeHelper.createPointerObject()) {
             Object callable = CUDARuntimeFunction.CUDA_MALLOCMANAGED.getSymbol(this);
@@ -138,39 +145,52 @@ public class CUDARuntime {
             return new LittleEndianNativeArrayView(addressAllocatedMemory, numBytes);
         } catch (InteropException e) {
             throw new GPJSONException(e);
+        } finally {
+            timings.end();
         }
     }
 
     @CompilerDirectives.TruffleBoundary
     public void cudaFree(LittleEndianNativeArrayView memory) {
+        timings.start("cudaFree");
+
         try {
             Object callable = CUDARuntimeFunction.CUDA_FREE.getSymbol(this);
             Object result = INTEROP.execute(callable, memory.getStartAddress());
             checkCUDAReturnCode(result, "cudaFree");
         } catch (InteropException e) {
             throw new GPJSONException(e);
+        } finally {
+            timings.end();
         }
     }
 
     @CompilerDirectives.TruffleBoundary
     public void cudaFree(GPUPointer pointer) {
+        timings.start("cudaFree");
+
         try {
             Object callable = CUDARuntimeFunction.CUDA_FREE.getSymbol(this);
             Object result = INTEROP.execute(callable, pointer.getRawPointer());
             checkCUDAReturnCode(result, "cudaFree");
         } catch (InteropException e) {
             throw new GPJSONException(e);
+        } finally {
+            timings.end();
         }
     }
 
     @CompilerDirectives.TruffleBoundary
     public void cudaDeviceSynchronize() {
+        timings.start("cudaDeviceSynchronize");
         try {
             Object callable = CUDARuntimeFunction.CUDA_DEVICESYNCHRONIZE.getSymbol(this);
             Object result = INTEROP.execute(callable);
             checkCUDAReturnCode(result, "cudaDeviceSynchronize");
         } catch (InteropException e) {
             throw new GPJSONException(e);
+        } finally {
+            timings.end();
         }
     }
 
@@ -187,6 +207,7 @@ public class CUDARuntime {
 
     @CompilerDirectives.TruffleBoundary
     public void cudaMemcpy(long destPointer, long fromPointer, long numBytesToCopy, CUDAMemcpyKind kind) {
+        timings.start("cudaMemcpy");
         try {
             Object callable = CUDARuntimeFunction.CUDA_MEMCPY.getSymbol(this);
             if (numBytesToCopy < 0) {
@@ -196,14 +217,23 @@ public class CUDARuntime {
             checkCUDAReturnCode(result, "cudaMemcpy");
         } catch (InteropException e) {
             throw new GPJSONException(e);
+        } finally {
+            timings.end();
         }
     }
 
     public Kernel getKernel(GPJSONKernel kernelType) {
-        return loadedKernels.computeIfAbsent(kernelType, this::loadKernel);
+        timings.start("getKernel", kernelType.getName());
+
+        try {
+            return loadedKernels.computeIfAbsent(kernelType, this::loadKernel);
+        } finally {
+            timings.end();
+        }
     }
 
     private Kernel loadKernel(GPJSONKernel kernelType) {
+        timings.start("loadKernel", kernelType.getName());
         String code;
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(kernelType.getFilename())) {
             if (is == null) {
@@ -220,11 +250,15 @@ public class CUDARuntime {
         CUModule module = cuModuleLoadData(ptx.getPtxSource(), moduleName);
         long kernelFunctionHandle = cuModuleGetFunction(module, ptx.getLoweredKernelName());
 
-        return new Kernel(this, kernelType.getName(), ptx.getLoweredKernelName(), kernelFunctionHandle, kernelType.getParameterSignature(), module, ptx.getPtxSource());
+        Kernel kernel = new Kernel(this, kernelType.getName(), ptx.getLoweredKernelName(), kernelFunctionHandle, kernelType.getParameterSignature(), module, ptx.getPtxSource());
+        timings.end();
+
+        return kernel;
     }
 
     @CompilerDirectives.TruffleBoundary
     public CUModule cuModuleLoad(String cubinName) {
+        timings.start("cuModuleLoad", cubinName);
         assertCUDAInitialized();
         try (UnsafeHelper.Integer64Object modulePtr = UnsafeHelper.createInteger64Object()) {
             Object callable = CUDADriverFunction.CU_MODULELOAD.getSymbol(this);
@@ -233,11 +267,14 @@ public class CUDARuntime {
             return new CUModule(this, cubinName, modulePtr.getValue());
         } catch (InteropException e) {
             throw new GPJSONException(e);
+        } finally {
+            timings.end();
         }
     }
 
     @CompilerDirectives.TruffleBoundary
     public CUModule cuModuleLoadData(String ptx, String moduleName) {
+        timings.start("cuModuleLoadData");
         assertCUDAInitialized();
         try (UnsafeHelper.Integer64Object modulePtr = UnsafeHelper.createInteger64Object()) {
             Object callable = CUDADriverFunction.CU_MODULELOADDATA.getSymbol(this);
@@ -246,6 +283,8 @@ public class CUDARuntime {
             return new CUModule(this, moduleName, modulePtr.getValue());
         } catch (InteropException e) {
             throw new GPJSONException(e);
+        } finally {
+            timings.end();
         }
     }
 
@@ -269,6 +308,7 @@ public class CUDARuntime {
      */
     @CompilerDirectives.TruffleBoundary
     public long cuModuleGetFunction(CUModule kernelModule, String kernelName) {
+        timings.start("cuModuleGetFunction");
         try (UnsafeHelper.Integer64Object functionPtr = UnsafeHelper.createInteger64Object()) {
             Object callable = CUDADriverFunction.CU_MODULEGETFUNCTION.getSymbol(this);
             Object result = INTEROP.execute(callable,
@@ -277,6 +317,8 @@ public class CUDARuntime {
             return functionPtr.getValue();
         } catch (InteropException e) {
             throw new GPJSONException(e);
+        } finally {
+            timings.end();
         }
     }
 
@@ -294,6 +336,7 @@ public class CUDARuntime {
 
     public void cuLaunchKernel(Kernel kernel, Dim3 gridSize, Dim3 blockSize, int dynamicSharedMemoryBytes, int stream, KernelArguments args) {
         try {
+            timings.start("cuLaunchKernel", kernel.getKernelName());
             Object callable = CUDADriverFunction.CU_LAUNCHKERNEL.getSymbol(this);
             Object result = INTEROP.execute(callable,
                     kernel.getKernelFunctionHandle(),
@@ -309,6 +352,7 @@ public class CUDARuntime {
                     0                               // extra args
             );
             checkCUReturnCode(result, "cuLaunchKernel");
+            timings.end();
             cudaDeviceSynchronize();
         } catch (InteropException e) {
             throw new GPJSONException(e);
@@ -402,11 +446,13 @@ public class CUDARuntime {
 
     @CompilerDirectives.TruffleBoundary
     private void assertCUDAInitialized() {
+        timings.start("assertCUDAInitialized");
         if (!context.isCUDAInitialized()) {
             // a simple way to create the device context in the driver is to call CUDA function
             cudaDeviceSynchronize();
             context.setCUDAInitialized();
         }
+        timings.end();
     }
 
     @SuppressWarnings("static-method")

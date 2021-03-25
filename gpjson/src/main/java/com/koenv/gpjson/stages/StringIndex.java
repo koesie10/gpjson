@@ -25,6 +25,7 @@ public class StringIndex {
     }
 
     public ManagedGPUPointer create() {
+        cudaRuntime.timings.start("StringIndex#create");
         // The string index memory is used for both the final string index and for the quote index
         ManagedGPUPointer stringIndexMemory = cudaRuntime.allocateUnmanagedMemory(resultSize, Type.SINT64);
 
@@ -41,6 +42,8 @@ public class StringIndex {
 
             createStringIndex(stringIndexMemory, carryIndexMemory);
         }
+
+        cudaRuntime.timings.end();
 
         return stringIndexMemory;
     }
@@ -82,6 +85,8 @@ public class StringIndex {
 
         kernel.execute(new Dim3(GRID_SIZE), new Dim3(BLOCK_SIZE), 0, 0, arguments);
 
+        cudaRuntime.timings.start("StringIndex#copyCarryBuffer");
+
         ByteBuffer carryBuffer = carryIndexMemory.copyToHost();
 
         byte previousValue = 0;
@@ -94,6 +99,8 @@ public class StringIndex {
         }
 
         carryIndexMemory.loadFrom(carryBuffer);
+
+        cudaRuntime.timings.end();
     }
 
     void createStringIndex(ManagedGPUPointer quoteIndexMemory, ManagedGPUPointer quoteCountMemory) {

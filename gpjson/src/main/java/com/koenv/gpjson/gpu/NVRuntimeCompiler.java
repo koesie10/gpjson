@@ -54,6 +54,7 @@ public class NVRuntimeCompiler {
 
     @TruffleBoundary
     public PTXKernel compileKernel(String code, String kernelName, String moduleName, String... compileOpts) {
+        runtime.timings.start("compileKernel", kernelName);
         try (NVRTCProgram program = createProgram(code, moduleName)) {
             nvrtcAddNameExpression(program, kernelName);
             NVRTCResult compileResult = nvrtcCompileProgram(program, compileOpts);
@@ -67,6 +68,8 @@ public class NVRuntimeCompiler {
             String loweredKernelName = nvrtcGetLoweredName(program, kernelName);
             String ptx = getPTX(program);
             return new PTXKernel(ptx, kernelName, loweredKernelName);
+        } finally {
+            runtime.timings.end();
         }
     }
 

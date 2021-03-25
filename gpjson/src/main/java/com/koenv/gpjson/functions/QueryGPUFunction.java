@@ -5,9 +5,10 @@ import com.koenv.gpjson.GPJSONException;
 import com.koenv.gpjson.gpu.CUDAMemcpyKind;
 import com.koenv.gpjson.gpu.ManagedGPUPointer;
 import com.koenv.gpjson.gpu.UnsafeHelper;
+import com.koenv.gpjson.kernel.GPJSONKernel;
 import com.koenv.gpjson.stages.NewlineIndex;
 import com.koenv.gpjson.stages.StringIndex;
-import com.koenv.gpjson.stages.StructuralIndex;
+import com.koenv.gpjson.stages.LeveledBitmapsIndex;
 import com.koenv.gpjson.util.FormatUtil;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
@@ -37,6 +38,17 @@ public class QueryGPUFunction extends Function {
     public Object call(Object[] arguments) throws UnsupportedTypeException, ArityException {
         long start = System.nanoTime();
 
+        context.getCudaRuntime().timings.start("compile_kernels");
+        for (GPJSONKernel kernel : GPJSONKernel.values()) {
+            context.getCudaRuntime().getKernel(kernel);
+        }
+        context.getCudaRuntime().timings.end();
+
+        long end = System.nanoTime();
+        System.out.printf("Compiling kernels done in %dms%n", TimeUnit.NANOSECONDS.toMillis(end - start));
+
+        context.getCudaRuntime().timings.start("queryGPU");
+
         checkArgumentLength(arguments, 2);
         String filename = expectString(arguments[0], "expected filename");
         String query = expectString(arguments[1], "expected query");
@@ -50,10 +62,10 @@ public class QueryGPUFunction extends Function {
             throw new GPJSONException("Failed to get size of file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         }
 
-        try (ManagedGPUPointer memory = context.getCudaRuntime().allocateUnmanagedMemory(size)) {
-            readFile(memory, file, size);
+        try (ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size)) {
+            readFile(fileMemory, file, size);
 
-            long end = System.nanoTime();
+            end = System.nanoTime();
             long duration = end - start;
             double durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
             double speed = size / durationSeconds;
@@ -62,7 +74,7 @@ public class QueryGPUFunction extends Function {
 
             start = System.nanoTime();
 
-            NewlineIndex newlineIndexCreator = new NewlineIndex(context.getCudaRuntime(), memory);
+            NewlineIndex newlineIndexCreator = new NewlineIndex(context.getCudaRuntime(), fileMemory);
             long[] newlineIndex = newlineIndexCreator.create();
 
             end = System.nanoTime();
@@ -76,7 +88,7 @@ public class QueryGPUFunction extends Function {
 
             start = System.nanoTime();
 
-            StringIndex stringIndexCreator = new StringIndex(context.getCudaRuntime(), memory);
+            StringIndex stringIndexCreator = new StringIndex(context.getCudaRuntime(), fileMemory);
 
             try (ManagedGPUPointer stringIndex = stringIndexCreator.create()) {
                 end = System.nanoTime();
@@ -88,9 +100,9 @@ public class QueryGPUFunction extends Function {
 
                 start = System.nanoTime();
 
-                StructuralIndex structuralIndexCreator = new StructuralIndex(context.getCudaRuntime(), memory, stringIndex);
+                LeveledBitmapsIndex leveledBitmapsIndexCreator = new LeveledBitmapsIndex(context.getCudaRuntime(), fileMemory, stringIndex);
 
-                try (ManagedGPUPointer structuralIndex = structuralIndexCreator.create()) {
+                try (ManagedGPUPointer leveledBitmapIndex = leveledBitmapsIndexCreator.create()) {
                     end = System.nanoTime();
                     duration = end - start;
                     durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
@@ -103,10 +115,15 @@ public class QueryGPUFunction extends Function {
             }
         }
 
-        return "test";
+        // queryGPU
+        context.getCudaRuntime().timings.end();
+
+        return context.getCudaRuntime().timings.export();
     }
 
     private void readFile(ManagedGPUPointer memory, Path file, long expectedSize) {
+        context.getCudaRuntime().timings.start("readFile");
+
         ByteBuffer buffer = ByteBuffer.allocateDirect(FILE_READ_BUFFER);
         UnsafeHelper.ByteArray byteArray = UnsafeHelper.createByteArray(buffer);
 
@@ -135,6 +152,8 @@ public class QueryGPUFunction extends Function {
             }
         } catch (IOException e) {
             throw new GPJSONException("Failed to open file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+        } finally {
+            context.getCudaRuntime().timings.end();
         }
     }
 }

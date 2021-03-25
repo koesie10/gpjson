@@ -79,6 +79,12 @@ public class UnsafeHelper {
         return new Integer8Object();
     }
 
+    public static Integer8Object createInteger8Object(byte value) {
+        Integer8Object int8 = createInteger8Object();
+        int8.setValue(value);
+        return int8;
+    }
+
     public static Integer16Object createInteger16Object() {
         return new Integer16Object();
     }

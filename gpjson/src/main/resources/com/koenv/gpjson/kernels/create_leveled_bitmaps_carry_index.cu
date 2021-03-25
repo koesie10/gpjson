@@ -1,4 +1,8 @@
-__global__ void discover_structure(char *file, long n, long *string_index, char *structural_index) {
+#define NUM_LEVELS 8
+
+__global__ void create_leveled_bitmaps_carry_index(char *file, long n, long *string_index, char *level_carry_index, char num_levels) {
+  assert(num_levels == NUM_LEVELS);
+
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
 
@@ -9,7 +13,10 @@ __global__ void discover_structure(char *file, long n, long *string_index, char 
   long start = index * chars_per_thread;
   long end = start + chars_per_thread;
 
+  // Temporary variable for storing the current string index
   long strings = 0;
+
+  char level = 0;
 
   for (long i = start; i < end && i < n; i += 1) {
     long offsetInBlock = i % 64;
@@ -19,22 +26,19 @@ __global__ void discover_structure(char *file, long n, long *string_index, char 
       strings = string_index[i / 64];
     }
 
+    // Do not process the character if we're in a string
     if ((strings & (1L << offsetInBlock)) != 0) {
       continue;
     }
 
     char value = file[i];
 
-    if (value == 0x2c) {
-      structural_index[i] = 0x01;
-    } else if (value == 0x3a) {
-      structural_index[i] = 0x02;
-    } else if (value == 0x5b || value == 0x5d || value == 0x7b || value == 0x7d) {
-      structural_index[i] = 0x04;
-    } else if (value == 0x09 || value == 0x0a || value == 0x0d) {
-      structural_index[i] = 0x08;
-    } else if (value == 0x20) {
-      structural_index[i] = 0x10;
+    if (value == '{' || value == '[') {
+      level++;
+    } else if (value == '}' || value == ']') {
+      level--;
     }
   }
+
+  level_carry_index[index] = level;
 }

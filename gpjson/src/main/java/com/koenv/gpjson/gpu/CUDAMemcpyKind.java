@@ -7,13 +7,13 @@ public enum CUDAMemcpyKind {
     DEVICE_TO_DEVICE(3),
     DEFAULT(4);
 
-    private final long kind;
+    private final int kind;
 
-    CUDAMemcpyKind(long kind) {
+    CUDAMemcpyKind(int kind) {
         this.kind = kind;
     }
 
-    public long getKind() {
+    public int getKind() {
         return kind;
     }
 }

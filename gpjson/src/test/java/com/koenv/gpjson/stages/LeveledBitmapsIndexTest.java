@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-public class StructuralIndexTest extends KernelTest {
+public class LeveledBitmapsIndexTest extends KernelTest {
     @ParameterizedTest
     @ValueSource(strings = {
             "simple",
@@ -24,9 +24,11 @@ public class StructuralIndexTest extends KernelTest {
         ) {
             stringIndexMemory.loadFrom(createStringIndex(name));
 
-            StructuralIndex structuralIndex = new StructuralIndex(cudaRuntime, fileMemory, stringIndexMemory);
-            try (ManagedGPUPointer indexMemory = structuralIndex.create()) {
+            LeveledBitmapsIndex leveledBitmapsIndex = new LeveledBitmapsIndex(cudaRuntime, fileMemory, stringIndexMemory);
+            try (ManagedGPUPointer indexMemory = leveledBitmapsIndex.create()) {
                 byte[] structural = GPUUtils.readBytes(cudaRuntime, indexMemory);
+
+                FormatUtils.formatFileWithLongIndex(cudaRuntime, fileMemory, indexMemory);
             }
         }
     }
@@ -39,16 +41,16 @@ public class StructuralIndexTest extends KernelTest {
         try (
                 ManagedGPUPointer fileMemory = readFileToGPU("stages/structural_index/" + name + ".json");
                 ManagedGPUPointer stringIndexMemory = cudaRuntime.allocateUnmanagedMemory((fileMemory.size() + 64 - 1) / 64, Type.SINT64);
-                ManagedGPUPointer structuralIndexMemory = cudaRuntime.allocateUnmanagedMemory(fileMemory.size(), Type.CHAR);
+                ManagedGPUPointer carryIndexMemory = cudaRuntime.allocateUnmanagedMemory(LeveledBitmapsIndex.LEVEL_INDEX_SIZE, Type.SINT8);
+                ManagedGPUPointer structuralIndexMemory = cudaRuntime.allocateUnmanagedMemory(((fileMemory.size() + 64 - 1) / 64) * LeveledBitmapsIndex.NUM_LEVELS, Type.SINT64);
         ) {
             stringIndexMemory.loadFrom(createStringIndex(name));
 
-            StructuralIndex structuralIndex = new StructuralIndex(cudaRuntime, fileMemory, stringIndexMemory);
+            LeveledBitmapsIndex leveledBitmapsIndex = new LeveledBitmapsIndex(cudaRuntime, fileMemory, stringIndexMemory);
 
-            FormatUtils.formatFileWithLongIndex(cudaRuntime, fileMemory, stringIndexMemory);
-            structuralIndex.createStructuralIndex(structuralIndexMemory);
+            leveledBitmapsIndex.createLeveledBitmaps(structuralIndexMemory, carryIndexMemory);
 
-            FormatUtils.formatFileWithByteIndex(cudaRuntime, fileMemory, structuralIndexMemory);
+            FormatUtils.formatFileWithLongIndex(cudaRuntime, fileMemory, structuralIndexMemory);
         }
     }
 
@@ -73,8 +75,6 @@ public class StructuralIndexTest extends KernelTest {
                 escaped = 0;
             }
         }
-
-        System.out.println(Long.toHexString(index[0]));
 
         ByteBuffer buffer = ByteBuffer.allocateDirect(index.length * 8).order(ByteOrder.LITTLE_ENDIAN);
         for (long l : index) {

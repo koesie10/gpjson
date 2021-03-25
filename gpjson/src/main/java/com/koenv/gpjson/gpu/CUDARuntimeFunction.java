@@ -154,14 +154,14 @@ public enum CUDARuntimeFunction implements CUDAFunction.Spec {
         @Override
         @CompilerDirectives.TruffleBoundary
         public Object call(CUDARuntime cudaRuntime, Object[] args) throws InteropException {
-            checkArgumentLength(args, 3);
+            checkArgumentLength(args, 4);
             long destPointer = expectLong(args[0]);
             long fromPointer = expectLong(args[1]);
             long numBytesToCopy = expectPositiveLong(args[2]);
             // cudaMemcpyKind from driver_types.h (default: direction of transfer is
             // inferred from the pointer values, uses virtual addressing)
-            final long cudaMemcpyDefault = 4;
-            callSymbol(cudaRuntime, destPointer, fromPointer, numBytesToCopy, cudaMemcpyDefault);
+            int kind = expectInt(args[3]);
+            callSymbol(cudaRuntime, destPointer, fromPointer, numBytesToCopy, kind);
             return NoneValue.get();
         }
     };

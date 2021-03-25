@@ -127,14 +127,11 @@ public final class Kernel implements TruffleObject {
     }
 
     public void execute(Dim3 gridSize, Dim3 blockSize, int dynamicSharedMemoryBytes, int stream, List<UnsafeHelper.MemoryObject> arguments) {
-        long start = System.nanoTime();
+        cudaRuntime.timings.start("kernel#execute", kernelName);
         incrementLaunchCount();
         try (KernelArguments args = new KernelArguments(arguments)) {
             cudaRuntime.cuLaunchKernel(this, gridSize, blockSize, dynamicSharedMemoryBytes, stream, args);
         }
-        long end = System.nanoTime();
-
-        long duration = end - start;
-        System.out.printf("Ran %s in %dms%n", kernelName, TimeUnit.NANOSECONDS.toMillis(duration));
+        cudaRuntime.timings.end();
     }
 }
