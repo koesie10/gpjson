@@ -223,6 +223,20 @@ public class CUDARuntime {
         }
     }
 
+    @CompilerDirectives.TruffleBoundary
+    public void cudaMemset(long pointer, int value, long count) {
+        timings.start("cudaMemset");
+        try {
+            Object callable = CUDARuntimeFunction.CUDA_MEMSET.getSymbol(this);
+            Object result = INTEROP.execute(callable, pointer, value, count);
+            checkCUDAReturnCode(result, "cudaMemcpy");
+        } catch (InteropException e) {
+            throw new GPJSONException(e);
+        } finally {
+            timings.end();
+        }
+    }
+
     public Kernel getKernel(GPJSONKernel kernelType) {
         timings.start("getKernel", kernelType.getName());
 

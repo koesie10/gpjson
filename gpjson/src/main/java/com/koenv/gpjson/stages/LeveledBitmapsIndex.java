@@ -39,6 +39,7 @@ public class LeveledBitmapsIndex {
     public ManagedGPUPointer create() {
         // The string index memory is used for both the final string index and for the quote index
         ManagedGPUPointer leveledBitmapsIndexMemory = cudaRuntime.allocateUnmanagedMemory(resultSize, Type.SINT64);
+        leveledBitmapsIndexMemory.setTo(0);
 
         try (ManagedGPUPointer carryMemory = cudaRuntime.allocateUnmanagedMemory(CARRY_INDEX_SIZE, Type.SINT8)) {
             createCarryIndex(carryMemory);

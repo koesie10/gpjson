@@ -1,5 +1,7 @@
 package com.koenv.gpjson.gpu;
 
+import com.koenv.gpjson.GPJSONException;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -62,5 +64,13 @@ public class ManagedGPUPointer implements AutoCloseable {
         UnsafeHelper.ByteArray byteArray = UnsafeHelper.createByteArray(buffer);
 
         cudaRuntime.cudaMemcpy(pointer.getRawPointer(), byteArray.getAddress(), size, CUDAMemcpyKind.HOST_TO_DEVICE);
+    }
+
+    public void setTo(int value) {
+        if (size % 4 != 0) {
+            throw new GPJSONException("Cannot set memory to 0 of non-4-aligned block");
+        }
+
+        cudaRuntime.cudaMemset(pointer.getRawPointer(), value, size / 4);
     }
 }

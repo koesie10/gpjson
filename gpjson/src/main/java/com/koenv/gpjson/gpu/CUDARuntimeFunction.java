@@ -164,6 +164,18 @@ public enum CUDARuntimeFunction implements CUDAFunction.Spec {
             callSymbol(cudaRuntime, destPointer, fromPointer, numBytesToCopy, kind);
             return NoneValue.get();
         }
+    },
+    CUDA_MEMSET("cudaMemset", "(pointer, uint32, uint64): sint32") {
+        @Override
+        @CompilerDirectives.TruffleBoundary
+        public Object call(CUDARuntime cudaRuntime, Object[] args) throws InteropException {
+            checkArgumentLength(args, 3);
+            long pointer = expectLong(args[0]);
+            int value = expectInt(args[1]);
+            long count = expectLong(args[2]);
+            callSymbol(cudaRuntime, pointer, value, count);
+            return NoneValue.get();
+        }
     };
 
     private final String name;

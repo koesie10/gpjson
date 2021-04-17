@@ -16,14 +16,6 @@ __global__ void create_leveled_bitmaps(char *file, long n, long *string_index, c
   // Temporary variable for storing the current string index
   long strings = 0;
 
-  // Temporary variable for storing the current bit indexes
-  long bit_index[NUM_LEVELS];
-
-  // Initialize bit index to 0
-  for (int l = 0; l < NUM_LEVELS; l++) {
-    bit_index[l] = 0;
-  }
-
   signed char level = carry_index[index];
 
   int final_loop_iteration = end;
@@ -50,26 +42,7 @@ __global__ void create_leveled_bitmaps(char *file, long n, long *string_index, c
       } else if (value == '}' || value == ']') {
         level--;
       } else if ((value == ':' || value == ',') && level >= 0 && level < num_levels) {
-        bit_index[level] = bit_index[level] | (1L << offsetInBlock);
-      }
-    }
-
-    // If we are at the end of a boundary, set our result.
-    if (offsetInBlock == 63L) {
-      for (int l = 0; l < num_levels; l++) {
-        leveled_bitmaps_index[level_size * l + i / 64] = bit_index[l];
-        // Reset the bit index since we're starting over
-        bit_index[l] = 0;
-      }
-    }
-  }
-
-  if (n < end && (final_loop_iteration - 1) % 64 != 63L && n - start > 0) {
-    // In the final thread with data, we need to do this to make sure the last longs are actually set
-    int final_index = (final_loop_iteration - 1) / 64;
-    if (final_index < level_size) {
-      for (int l = 0; l < num_levels; l++) {
-        leveled_bitmaps_index[level_size * l + final_index] = bit_index[l];
+        leveled_bitmaps_index[level_size * level + i / 64] |= (1L << offsetInBlock);
       }
     }
   }
