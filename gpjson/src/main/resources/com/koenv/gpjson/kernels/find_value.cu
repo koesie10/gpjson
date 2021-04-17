@@ -1,4 +1,4 @@
-__global__ void find_value(char *file, long n, long *new_line_index, long new_line_index_size, long *string_index, long *leveled_bitmaps_index, long leveled_bitmaps_index_size, long level_size, int num_levels, char *query, int query_size, long *result) {
+__global__ void find_value(char *file, long n, long *new_line_index, long new_line_index_size, long *string_index, long *leveled_bitmaps_index, long leveled_bitmaps_index_size, long level_size, char *query, int query_size, long *result) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
 
@@ -7,40 +7,40 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
   long start = index * lines_per_thread;
   long end = start + lines_per_thread;
 
-  int query_position = 0;
-
-  int current_level = 0;
-  char looking_for_type = query[query_position++];
-
-  int looking_for_length;
-  char *looking_for;
-
-  switch (looking_for_type) {
-    case 0x01: // Dot expression
-      looking_for_length = 0;
-      int i = 0;
-      int b;
-
-      while (((b = query[query_position++]) & 0x80) != 0) {
-        looking_for_length |= (b & 0x7F) << i;
-        i += 7;
-        assert(i <= 35);
-      }
-      looking_for_length = looking_for_length | (b << i);
-
-      looking_for = query + query_position;
-      query_position += looking_for_length;
-
-      break;
-    default:
-      assert(false);
-      break;
-  }
-
   for (long i = start; i < end && i < new_line_index_size; i += 1) {
     result[i] = -1;
     long new_line_start = new_line_index[i];
     long new_line_end = (i + 1 < new_line_index_size) ? new_line_index[i+1] : n;
+
+    int current_level = 0;
+    int query_position = 0;
+
+    char looking_for_type = query[query_position++];
+
+    int looking_for_length;
+    char *looking_for;
+
+    switch (looking_for_type) {
+      case 0x01: // Dot expression
+        looking_for_length = 0;
+        int i = 0;
+        int b;
+
+        while (((b = query[query_position++]) & 0x80) != 0) {
+          looking_for_length |= (b & 0x7F) << i;
+          i += 7;
+          assert(i <= 35);
+        }
+        looking_for_length = looking_for_length | (b << i);
+
+        looking_for = query + query_position;
+        query_position += looking_for_length;
+
+        break;
+      default:
+        assert(false);
+        break;
+    }
 
     for (long j = new_line_start; j < new_line_end && j < n; j += 1) {
       bool is_structural = (leveled_bitmaps_index[level_size * current_level + j / 64] & (1L << j % 64)) != 0;
@@ -95,6 +95,8 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
 
             looking_for = query + query_position;
             query_position += looking_for_length;
+
+            current_level++;
 
             break;
           default:

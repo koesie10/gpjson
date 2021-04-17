@@ -4,12 +4,13 @@ public class JSONPathParser {
     private final JSONPathLexer lexer;
 
     private final IRByteBuffer output = new IRByteBuffer();
+    private int maxLevel = 0;
 
     public JSONPathParser(JSONPathLexer lexer) {
         this.lexer = lexer;
     }
 
-    public IRByteBuffer compile() {
+    public JSONPathResult compile() {
         lexer.expectChar('$');
 
         compileNextExpression();
@@ -17,7 +18,7 @@ public class JSONPathParser {
         // Denote end
         output.writeByte(0x00);
 
-        return output;
+        return new JSONPathResult(output, maxLevel);
     }
 
     private void compileNextExpression() {
@@ -46,6 +47,8 @@ public class JSONPathParser {
         // Type = dot
         output.writeByte(0x01);
         output.writeString(property);
+
+        maxLevel++;
 
         if (lexer.hasNext()) {
             compileNextExpression();

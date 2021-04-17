@@ -1,6 +1,7 @@
 package com.koenv.gpjson.sequential;
 
 import com.koenv.gpjson.debug.Timings;
+import com.koenv.gpjson.jsonpath.JSONPathResult;
 import com.koenv.gpjson.jsonpath.ReadableIRByteBuffer;
 import com.koenv.gpjson.stages.LeveledBitmapsIndex;
 
@@ -62,12 +63,11 @@ public class Sequential {
         }
     }
 
-    public static long[] createLeveledBitmapsIndex(byte[] file, long[] stringIndex) {
+    public static long[] createLeveledBitmapsIndex(byte[] file, long[] stringIndex, int numLevels) {
         Timings.TIMINGS.start("Sequential#createLeveledBitmapsIndex");
 
         try {
             int levelSize = (file.length + 64 - 1) / 64;
-            int numLevels = LeveledBitmapsIndex.NUM_LEVELS;
             int resultSize = levelSize * numLevels;
 
             long[] leveledBitmapsIndex = new long[resultSize];
@@ -77,7 +77,7 @@ public class Sequential {
             /*long[] bitIndex = new long[numLevels];*/
 
             for (int i = 0; i < file.length; i++) {
-                assert (level >= -1 && level < numLevels);
+                assert (level >= -1);
 
                 int offsetInBlock = i % 64;
 
@@ -121,26 +121,14 @@ public class Sequential {
         }
     }
 
-    public static long[] findValue(byte[] file, long[] newlineIndex, long[] stringIndex, long[] leveledBitmapsIndex, ReadableIRByteBuffer query) {
+    public static long[] findValue(byte[] file, long[] newlineIndex, long[] stringIndex, long[] leveledBitmapsIndex, JSONPathResult query) {
         Timings.TIMINGS.start("Sequential#findValue");
+
+        ReadableIRByteBuffer queryBuffer = query.getIr().toReadable();
+        queryBuffer.mark();
 
         try {
             int levelSize = (file.length + 64 - 1) / 64;
-
-            int currentLevel = 0;
-            int lookingForType = query.readByte();
-
-            int lookingForLength;
-            byte[] lookingFor;
-
-            switch (lookingForType) {
-                case 0x01: // Dot expression
-                    lookingForLength = query.readVarint();
-                    lookingFor = query.readBytes(lookingForLength);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Invalid query type " + lookingForType);
-            }
 
             long[] result = new long[newlineIndex.length];
             Arrays.fill(result, -1);
@@ -148,6 +136,25 @@ public class Sequential {
             for (int i = 0; i < newlineIndex.length; i++) {
                 int newLineStart = (int) newlineIndex[i];
                 int newLineEnd = (i + 1 < newlineIndex.length) ? (int) newlineIndex[i + 1] : file.length;
+
+                queryBuffer.reset();
+                queryBuffer.mark();
+
+                int currentLevel = 0;
+
+                int lookingForType = queryBuffer.readByte();
+
+                int lookingForLength;
+                byte[] lookingFor;
+
+                switch (lookingForType) {
+                    case 0x01: // Dot expression
+                        lookingForLength = queryBuffer.readVarint();
+                        lookingFor = queryBuffer.readBytes(lookingForLength);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid query type " + lookingForType);
+                }
 
                 new_line_loop:
                 for (int j = newLineStart; j < newLineEnd && j < file.length; j += 1) {
@@ -184,7 +191,7 @@ public class Sequential {
                         }
 
                         // This means we are at the correct key, so we'll increase our level
-                        lookingForType = query.readByte();
+                        lookingForType = queryBuffer.readByte();
 
                         switch (lookingForType) {
                             case 0x00:
@@ -192,8 +199,8 @@ public class Sequential {
                                 break new_line_loop;
                             case 0x01: // Dot expression
                                 currentLevel++;
-                                lookingForLength = query.readVarint();
-                                lookingFor = query.readBytes(lookingForLength);
+                                lookingForLength = queryBuffer.readVarint();
+                                lookingFor = queryBuffer.readBytes(lookingForLength);
                                 break;
                             default:
                                 throw new IllegalArgumentException("Invalid query type " + lookingForType);

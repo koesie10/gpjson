@@ -29,7 +29,7 @@ public class LeveledBitmapsIndexTest extends KernelTest {
             ByteBuffer stringIndex = createStringIndex(name);
             stringIndexMemory.loadFrom(stringIndex);
 
-            LeveledBitmapsIndex leveledBitmapsIndex = new LeveledBitmapsIndex(cudaRuntime, fileMemory, stringIndexMemory);
+            LeveledBitmapsIndex leveledBitmapsIndex = new LeveledBitmapsIndex(cudaRuntime, fileMemory, stringIndexMemory, LeveledBitmapsIndex.MAX_NUM_LEVELS);
             try (ManagedGPUPointer indexMemory = leveledBitmapsIndex.create()) {
                 long[] leveledBitmaps = GPUUtils.readLongs(indexMemory);
                 long[] expectedLeveledBitmaps = createExpectedLeveledBitmapsIndex(name);
@@ -49,11 +49,11 @@ public class LeveledBitmapsIndexTest extends KernelTest {
                 ManagedGPUPointer fileMemory = readFileToGPU("stages/leveled_bitmaps_index/" + name + ".json");
                 ManagedGPUPointer stringIndexMemory = cudaRuntime.allocateUnmanagedMemory((fileMemory.size() + 64 - 1) / 64, Type.SINT64);
                 ManagedGPUPointer carryIndexMemory = cudaRuntime.allocateUnmanagedMemory(LeveledBitmapsIndex.CARRY_INDEX_SIZE, Type.SINT8);
-                ManagedGPUPointer leveledBitmapsIndexMemory = cudaRuntime.allocateUnmanagedMemory(((fileMemory.size() + 64 - 1) / 64) * LeveledBitmapsIndex.NUM_LEVELS, Type.SINT64);
+                ManagedGPUPointer leveledBitmapsIndexMemory = cudaRuntime.allocateUnmanagedMemory(((fileMemory.size() + 64 - 1) / 64) * LeveledBitmapsIndex.MAX_NUM_LEVELS, Type.SINT64);
         ) {
             stringIndexMemory.loadFrom(createStringIndex(name));
 
-            LeveledBitmapsIndex leveledBitmapsIndex = new LeveledBitmapsIndex(cudaRuntime, fileMemory, stringIndexMemory);
+            LeveledBitmapsIndex leveledBitmapsIndex = new LeveledBitmapsIndex(cudaRuntime, fileMemory, stringIndexMemory, LeveledBitmapsIndex.MAX_NUM_LEVELS);
 
             leveledBitmapsIndex.createCarryIndex(carryIndexMemory);
 
@@ -159,6 +159,6 @@ public class LeveledBitmapsIndexTest extends KernelTest {
 
         long[] stringIndex = Sequential.createStringIndex(bytes);
 
-        return Sequential.createLeveledBitmapsIndex(bytes, stringIndex);
+        return Sequential.createLeveledBitmapsIndex(bytes, stringIndex, LeveledBitmapsIndex.MAX_NUM_LEVELS);
     }
 }

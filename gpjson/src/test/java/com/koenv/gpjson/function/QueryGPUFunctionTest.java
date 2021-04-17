@@ -2,7 +2,7 @@ package com.koenv.gpjson.function;
 
 import com.koenv.gpjson.jsonpath.JSONPathLexer;
 import com.koenv.gpjson.jsonpath.JSONPathParser;
-import com.koenv.gpjson.jsonpath.ReadableIRByteBuffer;
+import com.koenv.gpjson.jsonpath.JSONPathResult;
 import com.koenv.gpjson.sequential.Sequential;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotAccess;
@@ -41,11 +41,11 @@ public class QueryGPUFunctionTest {
     @Test
     public void twitterSmallSequential() throws IOException {
         byte[] file = Files.readAllBytes(Paths.get("out/twitter_really_small.ldjson"));
-        ReadableIRByteBuffer compiledQuery = new JSONPathParser(new JSONPathLexer("$.user.lang")).compile().toReadable();
+        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathLexer("$.user.lang")).compile();
 
         long[] newlineIndex = Sequential.createNewlineIndex(file);
         long[] stringIndex = Sequential.createStringIndex(file);
-        long[] leveledBitmapsIndex = Sequential.createLeveledBitmapsIndex(file, stringIndex);
+        long[] leveledBitmapsIndex = Sequential.createLeveledBitmapsIndex(file, stringIndex, compiledQuery.getMaxDepth());
         long[] result = Sequential.findValue(file, newlineIndex, stringIndex, leveledBitmapsIndex, compiledQuery);
 
         StringBuilder returnValue = new StringBuilder();

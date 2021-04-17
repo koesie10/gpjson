@@ -1,7 +1,7 @@
 #define NUM_LEVELS 22
 
 __global__ void create_leveled_bitmaps(char *file, long n, long *string_index, char *carry_index, long *leveled_bitmaps_index, long leveled_bitmaps_index_size, long level_size, int num_levels) {
-  assert(num_levels == NUM_LEVELS);
+  assert(num_levels <= NUM_LEVELS);
 
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
@@ -32,7 +32,7 @@ __global__ void create_leveled_bitmaps(char *file, long n, long *string_index, c
   }
 
   for (long i = start; i < final_loop_iteration; i += 1) {
-    assert(level >= -1 && level < NUM_LEVELS);
+    assert(level >= -1);
 
     long offsetInBlock = i % 64;
 
@@ -49,14 +49,14 @@ __global__ void create_leveled_bitmaps(char *file, long n, long *string_index, c
         level++;
       } else if (value == '}' || value == ']') {
         level--;
-      } else if ((value == ':' || value == ',') && level >= 0 && level < NUM_LEVELS) {
+      } else if ((value == ':' || value == ',') && level >= 0 && level < num_levels) {
         bit_index[level] = bit_index[level] | (1L << offsetInBlock);
       }
     }
 
     // If we are at the end of a boundary, set our result.
     if (offsetInBlock == 63L) {
-      for (int l = 0; l < NUM_LEVELS; l++) {
+      for (int l = 0; l < num_levels; l++) {
         leveled_bitmaps_index[level_size * l + i / 64] = bit_index[l];
         // Reset the bit index since we're starting over
         bit_index[l] = 0;
@@ -68,7 +68,7 @@ __global__ void create_leveled_bitmaps(char *file, long n, long *string_index, c
     // In the final thread with data, we need to do this to make sure the last longs are actually set
     int final_index = (final_loop_iteration - 1) / 64;
     if (final_index < level_size) {
-      for (int l = 0; l < NUM_LEVELS; l++) {
+      for (int l = 0; l < num_levels; l++) {
         leveled_bitmaps_index[level_size * l + final_index] = bit_index[l];
       }
     }

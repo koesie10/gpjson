@@ -21,17 +21,19 @@ function formatBytes(bytes, decimals = 2) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
+const gpjson = Polyglot.eval('gpjson', 'jsonpath');
+
 // Warmup
 for (let i = 0; i < warmupRuns; i++) {
-    Polyglot.eval('gpjson', 'jsonpath').querySequential(filename, query);
+    gpjson.querySequential(filename, query);
 }
+
+console.log('Warm up done');
 
 const start = process.hrtime.bigint();
 
-let profile;
-
 for (let i = 0; i < actualRuns; i++) {
-    profile = Polyglot.eval('gpjson', 'jsonpath').querySequential(filename, query);
+    gpjson.querySequential(filename, query);
 }
 
 const end = process.hrtime.bigint();
@@ -44,4 +46,4 @@ const speed = filesize / averageTimeSeconds;
 
 console.log(`Average time is ${averageTimeMilliseconds.toFixed(3).toString()}ms, ${formatBytes(speed)}/second`);
 
-fs.writeFileSync('./benchmark_profile.json', profile);
+fs.writeFileSync('./benchmark_profile.json', gpjson.exportTimings());

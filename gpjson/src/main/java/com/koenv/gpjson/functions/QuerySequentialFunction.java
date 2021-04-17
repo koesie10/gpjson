@@ -1,10 +1,7 @@
 package com.koenv.gpjson.functions;
 
 import com.koenv.gpjson.GPJSONContext;
-import com.koenv.gpjson.jsonpath.JSONPathException;
-import com.koenv.gpjson.jsonpath.JSONPathLexer;
-import com.koenv.gpjson.jsonpath.JSONPathParser;
-import com.koenv.gpjson.jsonpath.ReadableIRByteBuffer;
+import com.koenv.gpjson.jsonpath.*;
 import com.koenv.gpjson.sequential.Sequential;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.ArityException;
@@ -38,11 +35,11 @@ public class QuerySequentialFunction extends Function {
             throw new RuntimeException(e);
         }
 
-        ReadableIRByteBuffer compiledQuery = new JSONPathParser(new JSONPathLexer(query)).compile().toReadable();
+        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathLexer(query)).compile();
 
         long[] newlineIndex = Sequential.createNewlineIndex(file);
         long[] stringIndex = Sequential.createStringIndex(file);
-        long[] leveledBitmapsIndex = Sequential.createLeveledBitmapsIndex(file, stringIndex);
+        long[] leveledBitmapsIndex = Sequential.createLeveledBitmapsIndex(file, stringIndex, compiledQuery.getMaxDepth());
         long[] result = Sequential.findValue(file, newlineIndex, stringIndex, leveledBitmapsIndex, compiledQuery);
 
         // queryGPU

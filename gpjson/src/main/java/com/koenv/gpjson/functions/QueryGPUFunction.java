@@ -2,10 +2,10 @@ package com.koenv.gpjson.functions;
 
 import com.koenv.gpjson.GPJSONContext;
 import com.koenv.gpjson.GPJSONException;
-import com.koenv.gpjson.debug.GPUUtils;
 import com.koenv.gpjson.gpu.*;
 import com.koenv.gpjson.jsonpath.JSONPathLexer;
 import com.koenv.gpjson.jsonpath.JSONPathParser;
+import com.koenv.gpjson.jsonpath.JSONPathResult;
 import com.koenv.gpjson.kernel.GPJSONKernel;
 import com.koenv.gpjson.stages.CombinedIndex;
 import com.koenv.gpjson.stages.CombinedIndexResult;
@@ -65,16 +65,17 @@ public class QueryGPUFunction extends Function {
             throw new GPJSONException("Failed to get size of file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         }
 
-        ByteBuffer compiledQuery = new JSONPathParser(new JSONPathLexer(query)).compile().toByteBuffer();
+        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathLexer(query)).compile();
+        ByteBuffer compiledQueryBuffer = compiledQuery.getIr().toByteBuffer();
 
         StringBuilder returnValue = new StringBuilder();
 
         try (
                 ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size);
-                ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(compiledQuery.capacity())
+                ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(compiledQueryBuffer.capacity())
         ) {
             readFile(fileMemory, file, size);
-            queryMemory.loadFrom(compiledQuery);
+            queryMemory.loadFrom(compiledQueryBuffer);
 
             end = System.nanoTime();
             long duration = end - start;
@@ -99,7 +100,7 @@ public class QueryGPUFunction extends Function {
 
                 start = System.nanoTime();
 
-                LeveledBitmapsIndex leveledBitmapsIndexCreator = new LeveledBitmapsIndex(context.getCudaRuntime(), fileMemory, stringIndex);
+                LeveledBitmapsIndex leveledBitmapsIndexCreator = new LeveledBitmapsIndex(context.getCudaRuntime(), fileMemory, stringIndex, (byte) compiledQuery.getMaxDepth());
 
                 try (ManagedGPUPointer leveledBitmapIndex = leveledBitmapsIndexCreator.create()) {
                     end = System.nanoTime();
@@ -124,10 +125,9 @@ public class QueryGPUFunction extends Function {
                         long levelSize = (fileMemory.size() + 64 - 1) / 64;
 
                         kernelArguments.add(UnsafeHelper.createInteger64Object(levelSize));
-                        kernelArguments.add(UnsafeHelper.createInteger32Object(LeveledBitmapsIndex.NUM_LEVELS));
 
                         kernelArguments.add(UnsafeHelper.createPointerObject(queryMemory));
-                        kernelArguments.add(UnsafeHelper.createInteger32Object(compiledQuery.capacity()));
+                        kernelArguments.add(UnsafeHelper.createInteger32Object(compiledQueryBuffer.capacity()));
 
                         kernelArguments.add(UnsafeHelper.createPointerObject(result));
 

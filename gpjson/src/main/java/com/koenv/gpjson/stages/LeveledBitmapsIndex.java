@@ -12,7 +12,7 @@ public class LeveledBitmapsIndex {
     public static final int BLOCK_SIZE = 1024;
 
     public static final int CARRY_INDEX_SIZE = GRID_SIZE * BLOCK_SIZE;
-    public static final int NUM_LEVELS = 22;
+    public static final byte MAX_NUM_LEVELS = 22;
 
     private final CUDARuntime cudaRuntime;
     private final ManagedGPUPointer fileMemory;
@@ -22,13 +22,17 @@ public class LeveledBitmapsIndex {
     private final long resultSize;
     private final byte numLevels;
 
-    public LeveledBitmapsIndex(CUDARuntime cudaRuntime, ManagedGPUPointer fileMemory, ManagedGPUPointer stringIndexMemory) {
+    public LeveledBitmapsIndex(CUDARuntime cudaRuntime, ManagedGPUPointer fileMemory, ManagedGPUPointer stringIndexMemory, byte numLevels) {
         this.cudaRuntime = cudaRuntime;
         this.fileMemory = fileMemory;
         this.stringIndexMemory = stringIndexMemory;
 
+        if (numLevels < 0 || numLevels > MAX_NUM_LEVELS) {
+            throw new IllegalArgumentException("Invalid number of levels");
+        }
+
         this.levelSize = (this.fileMemory.size() + 64 - 1) / 64;
-        this.numLevels = NUM_LEVELS;
+        this.numLevels = numLevels;
         this.resultSize = levelSize * numLevels;
     }
 

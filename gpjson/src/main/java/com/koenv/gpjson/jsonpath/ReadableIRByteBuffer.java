@@ -39,4 +39,16 @@ public class ReadableIRByteBuffer {
         byte[] bytes = readBytes(stringLength);
         return new String(bytes, StandardCharsets.UTF_8);
     }
+
+    public void mark() {
+        buffer.mark();
+    }
+
+    public void reset() {
+        buffer.reset();
+    }
+
+    public ByteBuffer byteBuffer() {
+        return this.buffer;
+    }
 }
