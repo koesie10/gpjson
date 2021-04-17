@@ -1,10 +1,12 @@
 package com.koenv.gpjson.stages;
 
+import com.koenv.gpjson.debug.GPUUtils;
 import com.koenv.gpjson.gpu.*;
 import com.koenv.gpjson.kernel.GPJSONKernel;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class NewlineIndex {
@@ -20,15 +22,16 @@ public class NewlineIndex {
         this.fileMemory = fileMemory;
     }
 
-    public long[] create() {
+    public ManagedGPUPointer create() {
         cudaRuntime.timings.start("NewlineIndex#create");
         try (ManagedGPUPointer countMemory = cudaRuntime.allocateUnmanagedMemory(COUNT_INDEX_SIZE, Type.SINT32)) {
             countNewlines(countMemory);
             int sum = createOffsetsIndex(countMemory);
 
-            try (ManagedGPUPointer indexMemory = cudaRuntime.allocateUnmanagedMemory(sum, Type.SINT64)) {
-                return createIndex(sum, countMemory, indexMemory);
-            }
+            ManagedGPUPointer indexMemory = cudaRuntime.allocateUnmanagedMemory(sum, Type.SINT64);
+            createIndex(countMemory, indexMemory);
+
+            return indexMemory;
         } finally {
             cudaRuntime.timings.end();
         }
@@ -50,7 +53,8 @@ public class NewlineIndex {
 
         ByteBuffer indexCountBuffer = countMemory.copyToHost();
 
-        int sum = 0;
+        // We start at 1, the first "new-line" is at position 0
+        int sum = 1;
         while (indexCountBuffer.hasRemaining()) {
             indexCountBuffer.mark();
             int value = indexCountBuffer.getInt();
@@ -68,7 +72,7 @@ public class NewlineIndex {
         return sum;
     }
 
-    long[] createIndex(int sum, ManagedGPUPointer offsetMemory, ManagedGPUPointer indexMemory) {
+    void createIndex(ManagedGPUPointer offsetMemory, ManagedGPUPointer indexMemory) {
         Kernel kernel = cudaRuntime.getKernel(GPJSONKernel.CREATE_NEWLINE_INDEX);
 
         List<UnsafeHelper.MemoryObject> arguments = new ArrayList<>();
@@ -78,15 +82,5 @@ public class NewlineIndex {
         arguments.add(UnsafeHelper.createPointerObject(indexMemory));
 
         kernel.execute(new Dim3(GRID_SIZE), new Dim3(BLOCK_SIZE), 0, 0, arguments);
-
-        ByteBuffer indexBuffer = indexMemory.copyToHost();
-
-        long[] index = new long[sum];
-        int i = 0;
-        while (indexBuffer.hasRemaining()) {
-            index[i++] = indexBuffer.getLong();
-        }
-
-        return index;
     }
 }

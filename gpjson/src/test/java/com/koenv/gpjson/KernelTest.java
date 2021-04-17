@@ -46,7 +46,7 @@ public class KernelTest {
             }
 
             ByteArrayOutputStream result = new ByteArrayOutputStream();
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[1 << 20];
             for (int length; (length = is.read(buffer)) != -1; ) {
                 result.write(buffer, 0, length);
             }

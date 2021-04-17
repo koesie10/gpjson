@@ -9,12 +9,19 @@ public final class GPUUtils {
     private GPUUtils() {
     }
 
-    public static byte[] readBytes(CUDARuntime cudaRuntime, ManagedGPUPointer memory) {
-        int size = (int) memory.size();
+    public static byte[] readBytes(ManagedGPUPointer memory) {
+        return readBytes(memory, -1);
+    }
 
-        ByteBuffer buffer = memory.copyToHost();
+    public static byte[] readBytes(ManagedGPUPointer memory, int maxNumElements) {
+        int numElements = (int) memory.size();
+        if (maxNumElements > 0) {
+            numElements = Math.min(numElements, maxNumElements);
+        }
 
-        byte[] result = new byte[size];
+        ByteBuffer buffer = memory.copyToHost(numElements);
+
+        byte[] result = new byte[numElements];
         int i = 0;
         while (buffer.hasRemaining()) {
             byte data = buffer.get();
@@ -25,7 +32,7 @@ public final class GPUUtils {
         return result;
     }
 
-    public static int[] readInts(CUDARuntime cudaRuntime, ManagedGPUPointer memory) {
+    public static int[] readInts(ManagedGPUPointer memory) {
         int numElements = (int) (memory.size() / Type.SINT32.getSizeBytes());
 
         ByteBuffer buffer = memory.copyToHost();
@@ -41,10 +48,17 @@ public final class GPUUtils {
         return result;
     }
 
-    public static long[] readLongs(CUDARuntime cudaRuntime, ManagedGPUPointer memory) {
-        int numElements = (int) (memory.size() / Type.SINT64.getSizeBytes());
+    public static long[] readLongs(ManagedGPUPointer memory) {
+        return readLongs(memory, -1);
+    }
 
-        ByteBuffer buffer = memory.copyToHost();
+    public static long[] readLongs(ManagedGPUPointer memory, int maxNumElements) {
+        int numElements = (int) (memory.size() / Type.SINT64.getSizeBytes());
+        if (maxNumElements > 0) {
+            numElements = Math.min(numElements, maxNumElements);
+        }
+
+        ByteBuffer buffer = memory.copyToHost(numElements * Type.SINT64.getSizeBytes());
 
         long[] result = new long[numElements];
         int i = 0;

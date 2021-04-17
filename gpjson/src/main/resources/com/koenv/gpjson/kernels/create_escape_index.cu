@@ -21,7 +21,12 @@ __global__ void create_escape_index(char *file, long n, bool *escape_carry_index
   int escape_count = 0;
   int total_count = end - start;
 
-  for (long i = start; i < end && i < n; i += 1) {
+  int final_loop_iteration = end;
+  if (n < end) {
+    final_loop_iteration = n;
+  }
+
+  for (long i = start; i < final_loop_iteration; i += 1) {
     // If our last carry was 1, then we add it to the bit index here.
     // We do it here because we are actually setting the character that
     // is escaped, and not the escape character itself.
@@ -39,12 +44,13 @@ __global__ void create_escape_index(char *file, long n, bool *escape_carry_index
     // If we are at the end of boundary, set our result.
     if (i % 64 == 63) {
       escape_index[i / 64] = bit_index;
+      bit_index = 0;
     }
   }
 
-  // In the final thread with data, we need to do this to make sure the last long is actually set
-  int final_index = (end - 1) / 64;
-  if (final_index < escape_index_size) {
+  if (n < end && (final_loop_iteration - 1) % 64 != 63L && n - start > 0) {
+    // In the final thread with data, we need to do this to make sure the last longs are actually set
+    int final_index = (final_loop_iteration - 1) / 64;
     escape_index[final_index] = bit_index;
   }
 

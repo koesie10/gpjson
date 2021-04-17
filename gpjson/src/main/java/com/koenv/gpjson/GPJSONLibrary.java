@@ -28,10 +28,7 @@
  */
 package com.koenv.gpjson;
 
-import com.koenv.gpjson.functions.Function;
-import com.koenv.gpjson.functions.QueryFunction;
-import com.koenv.gpjson.functions.QueryGPUFunction;
-import com.koenv.gpjson.functions.UnsafeGetCUDARuntimeFunction;
+import com.koenv.gpjson.functions.*;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -51,6 +48,8 @@ public class GPJSONLibrary implements TruffleObject {
     public GPJSONLibrary(GPJSONContext context) {
         this.map.put("query", new QueryFunction());
         this.map.put("queryGPU", new QueryGPUFunction(context));
+        this.map.put("querySequential", new QuerySequentialFunction(context));
+        this.map.put("exportTimings", new ExportTimingsFunction());
 
         unsafeGetCUDARuntimeFunction = new UnsafeGetCUDARuntimeFunction(context.getCudaRuntime());
     }

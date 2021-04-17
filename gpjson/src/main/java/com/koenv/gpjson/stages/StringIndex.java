@@ -1,5 +1,6 @@
 package com.koenv.gpjson.stages;
 
+import com.koenv.gpjson.debug.FormatUtils;
 import com.koenv.gpjson.gpu.*;
 import com.koenv.gpjson.kernel.GPJSONKernel;
 
@@ -96,6 +97,8 @@ public class StringIndex {
             carryBuffer.reset();
 
             carryBuffer.put(value);
+
+            previousValue = value;
         }
 
         carryIndexMemory.loadFrom(carryBuffer);

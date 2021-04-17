@@ -4,12 +4,11 @@ import com.koenv.gpjson.KernelTest;
 import com.koenv.gpjson.debug.GPUUtils;
 import com.koenv.gpjson.gpu.ManagedGPUPointer;
 import com.koenv.gpjson.gpu.Type;
+import com.koenv.gpjson.sequential.Sequential;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -29,10 +28,12 @@ public class NewlineIndexTest extends KernelTest {
         ) {
             NewlineIndex newlineIndex = new NewlineIndex(cudaRuntime, fileMemory);
 
-            long[] index = newlineIndex.create();
-            long[] expectedIndex = createExpectedIndex(name);
+            try (ManagedGPUPointer newlineIndexMemory = newlineIndex.create()) {
+                long[] index = GPUUtils.readLongs(newlineIndexMemory);
+                long[] expectedIndex = createExpectedIndex(name);
 
-            assertArrayEquals(expectedIndex, index);
+                assertArrayEquals(expectedIndex, index);
+            }
         }
     }
 
@@ -52,22 +53,24 @@ public class NewlineIndexTest extends KernelTest {
 
             newlineIndex.countNewlines(countMemory);
 
-            int[] counts = GPUUtils.readInts(cudaRuntime, countMemory);
+            int[] counts = GPUUtils.readInts(countMemory);
             int[] expectedCounts = createExpectedCounts(name);
 
             assertArrayEquals(expectedCounts, counts);
 
             int sum = newlineIndex.createOffsetsIndex(countMemory);
 
-            assertEquals(IntStream.of(expectedCounts).sum(), sum);
+            assertEquals(IntStream.of(expectedCounts).sum() + 1, sum);
 
-            int[] offsets = GPUUtils.readInts(cudaRuntime, countMemory);
+            int[] offsets = GPUUtils.readInts(countMemory);
             int[] expectedOffsets = createExpectedOffsets(counts);
 
             assertArrayEquals(expectedOffsets, offsets);
 
             try (ManagedGPUPointer indexMemory = cudaRuntime.allocateUnmanagedMemory(sum, Type.SINT64)) {
-                long[] index = newlineIndex.createIndex(sum, countMemory, indexMemory);
+                newlineIndex.createIndex(countMemory, indexMemory);
+
+                long[] index = GPUUtils.readLongs(indexMemory);
                 long[] expectedIndex = createExpectedIndex(name);
 
                 assertArrayEquals(expectedIndex, index);
@@ -95,6 +98,7 @@ public class NewlineIndexTest extends KernelTest {
 
     private int[] createExpectedOffsets(int[] counts) {
         int[] index = new int[counts.length];
+        index[0] = 1;
 
         for (int i = 1; i < counts.length; i++) {
             index[i] = index[i - 1] + counts[i - 1];
@@ -106,16 +110,6 @@ public class NewlineIndexTest extends KernelTest {
     private long[] createExpectedIndex(String name) throws IOException {
         byte[] bytes = readFile("stages/newline_index/" + name + ".txt");
 
-        List<Long> index = new ArrayList<>();
-
-        for (int i = 0; i < bytes.length; i++) {
-            if (bytes[i] != '\n') {
-                continue;
-            }
-
-            index.add((long) i);
-        }
-
-        return index.stream().mapToLong(value -> value).toArray();
+        return Sequential.createNewlineIndex(bytes);
     }
 }

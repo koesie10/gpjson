@@ -11,8 +11,8 @@ public class LeveledBitmapsIndex {
     public static final int GRID_SIZE = 8;
     public static final int BLOCK_SIZE = 1024;
 
-    public static final int LEVEL_INDEX_SIZE = GRID_SIZE * BLOCK_SIZE;
-    public static final int NUM_LEVELS = 8;
+    public static final int CARRY_INDEX_SIZE = GRID_SIZE * BLOCK_SIZE;
+    public static final int NUM_LEVELS = 22;
 
     private final CUDARuntime cudaRuntime;
     private final ManagedGPUPointer fileMemory;
@@ -34,17 +34,17 @@ public class LeveledBitmapsIndex {
 
     public ManagedGPUPointer create() {
         // The string index memory is used for both the final string index and for the quote index
-        ManagedGPUPointer structuralIndexMemory = cudaRuntime.allocateUnmanagedMemory(resultSize, Type.SINT64);
+        ManagedGPUPointer leveledBitmapsIndexMemory = cudaRuntime.allocateUnmanagedMemory(resultSize, Type.SINT64);
 
-        try (ManagedGPUPointer carryMemory = cudaRuntime.allocateUnmanagedMemory(LEVEL_INDEX_SIZE, Type.SINT8)) {
+        try (ManagedGPUPointer carryMemory = cudaRuntime.allocateUnmanagedMemory(CARRY_INDEX_SIZE, Type.SINT8)) {
             createCarryIndex(carryMemory);
 
             createLevelsIndex(carryMemory);
 
-            createLeveledBitmaps(structuralIndexMemory, carryMemory);
+            createLeveledBitmaps(leveledBitmapsIndexMemory, carryMemory);
         }
 
-        return structuralIndexMemory;
+        return leveledBitmapsIndexMemory;
     }
 
     void createCarryIndex(ManagedGPUPointer carryMemory) {
@@ -55,7 +55,6 @@ public class LeveledBitmapsIndex {
         arguments.add(UnsafeHelper.createInteger64Object(fileMemory.size()));
         arguments.add(UnsafeHelper.createPointerObject(stringIndexMemory));
         arguments.add(UnsafeHelper.createPointerObject(carryMemory));
-        arguments.add(UnsafeHelper.createInteger8Object(numLevels));
 
         kernel.execute(new Dim3(GRID_SIZE), new Dim3(BLOCK_SIZE), 0, 0, arguments);
     }
@@ -81,7 +80,7 @@ public class LeveledBitmapsIndex {
         cudaRuntime.timings.end();
     }
 
-    void createLeveledBitmaps(ManagedGPUPointer structuralIndexMemory, ManagedGPUPointer carryIndexMemory) {
+    void createLeveledBitmaps(ManagedGPUPointer leveledBitmapsIndexMemory, ManagedGPUPointer carryIndexMemory) {
         Kernel kernel = cudaRuntime.getKernel(GPJSONKernel.CREATE_LEVELED_BITMAPS);
 
         List<UnsafeHelper.MemoryObject> arguments = new ArrayList<>();
@@ -89,10 +88,10 @@ public class LeveledBitmapsIndex {
         arguments.add(UnsafeHelper.createInteger64Object(fileMemory.size()));
         arguments.add(UnsafeHelper.createPointerObject(stringIndexMemory));
         arguments.add(UnsafeHelper.createPointerObject(carryIndexMemory));
-        arguments.add(UnsafeHelper.createPointerObject(structuralIndexMemory));
+        arguments.add(UnsafeHelper.createPointerObject(leveledBitmapsIndexMemory));
         arguments.add(UnsafeHelper.createInteger64Object(resultSize));
         arguments.add(UnsafeHelper.createInteger64Object(levelSize));
-        arguments.add(UnsafeHelper.createInteger8Object(numLevels));
+        arguments.add(UnsafeHelper.createInteger32Object(numLevels));
 
         kernel.execute(new Dim3(GRID_SIZE), new Dim3(BLOCK_SIZE), 0, 0, arguments);
     }

@@ -28,6 +28,11 @@ shadowJar {
     relocate 'org.slf4j', 'com.koenv.gpjson.thirdparty.org.slf4j'
 }
 
+test {
+    minHeapSize = "4096m"
+    maxHeapSize = "16384m"
+}
+
 build.dependsOn(shadowJar)
 
 task copyToGraalVM(type: Copy) {

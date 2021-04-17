@@ -1,8 +1,4 @@
-#define NUM_LEVELS 8
-
-__global__ void create_leveled_bitmaps_carry_index(char *file, long n, long *string_index, char *level_carry_index, char num_levels) {
-  assert(num_levels == NUM_LEVELS);
-
+__global__ void create_leveled_bitmaps_carry_index(char *file, long n, long *string_index, char *level_carry_index) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
 
@@ -16,7 +12,7 @@ __global__ void create_leveled_bitmaps_carry_index(char *file, long n, long *str
   // Temporary variable for storing the current string index
   long strings = 0;
 
-  char level = 0;
+  signed char level = 0;
 
   for (long i = start; i < end && i < n; i += 1) {
     long offsetInBlock = i % 64;

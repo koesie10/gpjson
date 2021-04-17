@@ -71,7 +71,7 @@ public class CUDARuntime {
     private final GPJSONContext context;
     private final NVRuntimeCompiler nvrtc;
 
-    public final Timings timings = new Timings();
+    public final Timings timings = Timings.TIMINGS;
 
     public CUDARuntime(GPJSONContext context, TruffleLanguage.Env env) {
         this.context = context;
@@ -110,11 +110,12 @@ public class CUDARuntime {
     }
 
     public ManagedGPUPointer allocateUnmanagedMemory(long numBytes) {
-        return new ManagedGPUPointer(this, cudaMalloc(numBytes), numBytes);
+        return new ManagedGPUPointer(this, cudaMalloc(numBytes), numBytes, numBytes, null);
     }
 
     public ManagedGPUPointer allocateUnmanagedMemory(long numElements, Type type) {
-        return allocateUnmanagedMemory(numElements * type.getSizeBytes());
+        long numBytes = numElements * type.getSizeBytes();
+        return new ManagedGPUPointer(this, cudaMalloc(numBytes), numBytes, numElements, type);
     }
 
     @CompilerDirectives.TruffleBoundary

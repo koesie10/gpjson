@@ -2,7 +2,8 @@ __global__ void create_escape_carry_index(char *file, long n, char *escape_carry
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
 
-  long chars_per_thread = max((n+stride-1) / stride, 64L);
+  long normal_chars_per_thread = max((n+stride-1) / stride, 64L);
+  long chars_per_thread = ((normal_chars_per_thread + 64 - 1) / 64) * 64;
   long start = index * chars_per_thread;
   long end = start + chars_per_thread;
 
@@ -14,7 +15,7 @@ __global__ void create_escape_carry_index(char *file, long n, char *escape_carry
   // calculate the carry of each thread assuming the initial
   // carry is 0.
 
-  long carry = 0;
+  char carry = 0;
 
   for (long i = start; i < end && i < n; i += 1) {
     if (file[i] == '\\') {

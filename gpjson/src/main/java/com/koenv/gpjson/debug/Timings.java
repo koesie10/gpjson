@@ -6,6 +6,8 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Timings {
+    public static final Timings TIMINGS = new Timings();
+
     private final Stack<Data> stack = new Stack<>();
     private final Map<String, Frame> frames = new HashMap<>();
     private final AtomicInteger frameId = new AtomicInteger(0);

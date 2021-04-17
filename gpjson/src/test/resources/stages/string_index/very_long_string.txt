@@ -1,0 +1,1 @@
+The string will start at a character just before the 64th: "This is a string that spans multiple blocks of the GPU process, such that it is tested that this actually carries over. It will even extend past multiple 64-character blocks, to make sure it works in all of them."

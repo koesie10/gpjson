@@ -2,13 +2,11 @@ package com.koenv.gpjson.functions;
 
 import com.koenv.gpjson.GPJSONContext;
 import com.koenv.gpjson.GPJSONException;
-import com.koenv.gpjson.gpu.CUDAMemcpyKind;
-import com.koenv.gpjson.gpu.ManagedGPUPointer;
-import com.koenv.gpjson.gpu.UnsafeHelper;
+import com.koenv.gpjson.gpu.*;
 import com.koenv.gpjson.kernel.GPJSONKernel;
+import com.koenv.gpjson.stages.LeveledBitmapsIndex;
 import com.koenv.gpjson.stages.NewlineIndex;
 import com.koenv.gpjson.stages.StringIndex;
-import com.koenv.gpjson.stages.LeveledBitmapsIndex;
 import com.koenv.gpjson.util.FormatUtil;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
@@ -21,6 +19,8 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class QueryGPUFunction extends Function {
@@ -62,6 +62,8 @@ public class QueryGPUFunction extends Function {
             throw new GPJSONException("Failed to get size of file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         }
 
+        StringBuilder returnValue = new StringBuilder();
+
         try (ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size)) {
             readFile(fileMemory, file, size);
 
@@ -75,42 +77,87 @@ public class QueryGPUFunction extends Function {
             start = System.nanoTime();
 
             NewlineIndex newlineIndexCreator = new NewlineIndex(context.getCudaRuntime(), fileMemory);
-            long[] newlineIndex = newlineIndexCreator.create();
-
-            end = System.nanoTime();
-            duration = end - start;
-            durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
-            speed = size / durationSeconds;
-
-            System.out.printf("Creating newline index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
-            // System.out.println(Arrays.toString(newlineIndex));
-            System.out.println(newlineIndex.length);
-
-            start = System.nanoTime();
-
-            StringIndex stringIndexCreator = new StringIndex(context.getCudaRuntime(), fileMemory);
-
-            try (ManagedGPUPointer stringIndex = stringIndexCreator.create()) {
+            try (ManagedGPUPointer newlineIndex = newlineIndexCreator.create()) {
                 end = System.nanoTime();
                 duration = end - start;
                 durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
                 speed = size / durationSeconds;
 
-                System.out.printf("Creating string index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+                System.out.printf("Creating newline index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
                 start = System.nanoTime();
 
-                LeveledBitmapsIndex leveledBitmapsIndexCreator = new LeveledBitmapsIndex(context.getCudaRuntime(), fileMemory, stringIndex);
+                StringIndex stringIndexCreator = new StringIndex(context.getCudaRuntime(), fileMemory);
 
-                try (ManagedGPUPointer leveledBitmapIndex = leveledBitmapsIndexCreator.create()) {
+                try (ManagedGPUPointer stringIndex = stringIndexCreator.create()) {
                     end = System.nanoTime();
                     duration = end - start;
                     durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
                     speed = size / durationSeconds;
 
-                    System.out.printf("Creating structural index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+                    System.out.printf("Creating string index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
-                    // TODO: Use structural index
+                    start = System.nanoTime();
+
+                    LeveledBitmapsIndex leveledBitmapsIndexCreator = new LeveledBitmapsIndex(context.getCudaRuntime(), fileMemory, stringIndex);
+
+                    try (ManagedGPUPointer leveledBitmapIndex = leveledBitmapsIndexCreator.create()) {
+                        end = System.nanoTime();
+                        duration = end - start;
+                        durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
+                        speed = size / durationSeconds;
+
+                        System.out.printf("Creating leveled bitmaps index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+
+                        try (ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements(), Type.SINT64)) {
+                            Kernel kernel = context.getCudaRuntime().getKernel(GPJSONKernel.FIND_VALUE);
+
+                            List<UnsafeHelper.MemoryObject> kernelArguments = new ArrayList<>();
+                            kernelArguments.add(UnsafeHelper.createPointerObject(fileMemory));
+                            kernelArguments.add(UnsafeHelper.createInteger64Object(fileMemory.numberOfElements()));
+                            kernelArguments.add(UnsafeHelper.createPointerObject(newlineIndex));
+                            kernelArguments.add(UnsafeHelper.createInteger64Object(newlineIndex.numberOfElements()));
+                            kernelArguments.add(UnsafeHelper.createPointerObject(stringIndex));
+                            kernelArguments.add(UnsafeHelper.createPointerObject(leveledBitmapIndex));
+                            kernelArguments.add(UnsafeHelper.createInteger64Object(leveledBitmapIndex.numberOfElements()));
+
+                            long levelSize = (fileMemory.size() + 64 - 1) / 64;
+
+                            kernelArguments.add(UnsafeHelper.createInteger64Object(levelSize));
+                            kernelArguments.add(UnsafeHelper.createInteger32Object(LeveledBitmapsIndex.NUM_LEVELS));
+                            kernelArguments.add(UnsafeHelper.createPointerObject(result));
+
+                            start = System.nanoTime();
+
+                            kernel.execute(new Dim3(8), new Dim3(1024), 0, 0, kernelArguments);
+
+                            end = System.nanoTime();
+                            duration = end - start;
+                            durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
+                            speed = size / durationSeconds;
+
+                            System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+
+                            /*context.getCudaRuntime().timings.start("write_result");
+                            byte[] values = GPUUtils.readBytes(fileMemory);
+
+                            long[] returnValues = GPUUtils.readLongs(result);
+                            for (long value : returnValues) {
+                                returnValue.append(value);
+
+                                if (value > -1) {
+                                    returnValue.append(": ");
+
+                                    for (int m = 0; m < 8; m++) {
+                                        returnValue.append((char) values[(int) value + m]);
+                                    }
+                                }
+
+                                returnValue.append('\n');
+                            }
+                            context.getCudaRuntime().timings.end();*/
+                        }
+                    }
                 }
             }
         }
@@ -118,7 +165,7 @@ public class QueryGPUFunction extends Function {
         // queryGPU
         context.getCudaRuntime().timings.end();
 
-        return context.getCudaRuntime().timings.export();
+        return returnValue.toString();
     }
 
     private void readFile(ManagedGPUPointer memory, Path file, long expectedSize) {

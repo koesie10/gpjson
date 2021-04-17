@@ -1,17 +1,18 @@
 package com.koenv.gpjson.debug;
 
-import com.koenv.gpjson.gpu.CUDARuntime;
 import com.koenv.gpjson.gpu.ManagedGPUPointer;
 
+import java.io.IOException;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public final class FormatUtils {
     private FormatUtils() {}
 
-    public static void formatFileWithLongIndex(CUDARuntime cudaRuntime, ManagedGPUPointer file, ManagedGPUPointer index) {
-        byte[] bytes = GPUUtils.readBytes(cudaRuntime, file);
-        long[] indexData = GPUUtils.readLongs(cudaRuntime, index);
+    public static void formatFileWithLongIndex(ManagedGPUPointer file, ManagedGPUPointer index) {
+        byte[] bytes = GPUUtils.readBytes(file);
+        long[] indexData = GPUUtils.readLongs(index);
 
         formatFileWithLongIndex(bytes, indexData);
     }
@@ -26,14 +27,31 @@ public final class FormatUtils {
 
             System.arraycopy(emptyString, 0, escapeStringPart, 0, 64);
             System.arraycopy(file, start, escapeStringPart, 0, end - start);
-            System.out.println(new String(escapeStringPart, StandardCharsets.UTF_8));
+            System.out.println(new String(escapeStringPart, StandardCharsets.UTF_8).replace('\n', '↵'));
             System.out.println(new StringBuilder(String.format("%64s", Long.toBinaryString(index[j])).replace(' ', '0')).reverse().toString());
         }
     }
 
-    public static void formatFileWithByteIndex(CUDARuntime cudaRuntime, ManagedGPUPointer file, ManagedGPUPointer index) {
-        byte[] bytes = GPUUtils.readBytes(cudaRuntime, file);
-        byte[] indexData = GPUUtils.readBytes(cudaRuntime, index);
+    public static void formatFileWithLongIndexToWriter(Writer w, byte[] file, long[] index) throws IOException {
+        byte[] emptyString = new byte[64];
+        Arrays.fill(emptyString, (byte) ' ');
+        byte[] escapeStringPart = new byte[64];
+        for (int j = 0; j < (file.length + 64 - 1) / 64; j++) {
+            int start = j * 64;
+            int end = Math.min(j * 64 + 64, file.length);
+
+            System.arraycopy(emptyString, 0, escapeStringPart, 0, 64);
+            System.arraycopy(file, start, escapeStringPart, 0, end - start);
+            w.write(new String(escapeStringPart, StandardCharsets.UTF_8).replace('\n', '↵'));
+            w.write('\n');
+            w.write(new StringBuilder(String.format("%64s", Long.toBinaryString(index[j])).replace(' ', '0')).reverse().toString());
+            w.write('\n');
+        }
+    }
+
+    public static void formatFileWithByteIndex(ManagedGPUPointer file, ManagedGPUPointer index) {
+        byte[] bytes = GPUUtils.readBytes(file);
+        byte[] indexData = GPUUtils.readBytes(index);
 
         formatFileWithByteIndex(bytes, indexData);
     }

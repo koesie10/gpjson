@@ -17,7 +17,12 @@ __global__ void create_quote_index(char *file, long n, long *escape_index, long 
 
   int quote_count = 0;
 
-  for (long i = start; i < end && i < n; i += 1) {
+  int final_loop_iteration = end;
+  if (n < end) {
+    final_loop_iteration = n;
+  }
+
+  for (long i = start; i < final_loop_iteration; i += 1) {
     long offsetInBlock = i % 64;
 
     // At the start of each boundary (including the first), set the escaped characters
@@ -34,16 +39,16 @@ __global__ void create_quote_index(char *file, long n, long *escape_index, long 
 
     // If we are at the end of a boundary, set our result. We do not do it
     // if we are at the end since that would reset our bit_index.
-    if (offsetInBlock == 63L && i != end - 1) {
+    if (offsetInBlock == 63L) {
       quote_index[i / 64] = bit_index;
       // Reset the bit index since we're starting over
       bit_index = 0;
     }
   }
 
-  // In the final thread with data, we need to do this to make sure the last long is actually set
-  int final_index = (end - 1) / 64;
-  if (final_index < quote_index_size) {
+  if (n < end && (final_loop_iteration - 1) % 64 != 63L && n - start > 0) {
+    // In the final thread with data, we need to do this to make sure the last longs are actually set
+    int final_index = (final_loop_iteration - 1) / 64;
     quote_index[final_index] = bit_index;
   }
 
