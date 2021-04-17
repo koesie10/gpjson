@@ -1,5 +1,8 @@
 package com.koenv.gpjson.function;
 
+import com.koenv.gpjson.jsonpath.JSONPathLexer;
+import com.koenv.gpjson.jsonpath.JSONPathParser;
+import com.koenv.gpjson.jsonpath.ReadableIRByteBuffer;
 import com.koenv.gpjson.sequential.Sequential;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotAccess;
@@ -32,17 +35,18 @@ public class QueryGPUFunctionTest {
 
     @Test
     public void twitterSmall() {
-        System.out.println(context.eval("gpjson", "jsonpath").invokeMember("queryGPU", "out/twitter_small_records_smaller.txt", "$.user.lang"));
+        System.out.println(context.eval("gpjson", "jsonpath").invokeMember("queryGPU", "out/twitter_small_records_smaller.json", "$.user.lang"));
     }
 
     @Test
     public void twitterSmallSequential() throws IOException {
         byte[] file = Files.readAllBytes(Paths.get("out/twitter_really_small.ldjson"));
+        ReadableIRByteBuffer compiledQuery = new JSONPathParser(new JSONPathLexer("$.user.lang")).compile().toReadable();
 
         long[] newlineIndex = Sequential.createNewlineIndex(file);
         long[] stringIndex = Sequential.createStringIndex(file);
         long[] leveledBitmapsIndex = Sequential.createLeveledBitmapsIndex(file, stringIndex);
-        long[] result = Sequential.findValue(file, newlineIndex, stringIndex, leveledBitmapsIndex);
+        long[] result = Sequential.findValue(file, newlineIndex, stringIndex, leveledBitmapsIndex, compiledQuery);
 
         StringBuilder returnValue = new StringBuilder();
 

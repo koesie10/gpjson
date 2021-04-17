@@ -1,4 +1,4 @@
-__global__ void find_value(char *file, long n, long *new_line_index, long new_line_index_size, long *string_index, long *leveled_bitmaps_index, long leveled_bitmaps_index_size, long level_size, int num_levels, long *result) {
+__global__ void find_value(char *file, long n, long *new_line_index, long new_line_index_size, long *string_index, long *leveled_bitmaps_index, long leveled_bitmaps_index_size, long level_size, int num_levels, char *query, int query_size, long *result) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
 
@@ -7,9 +7,35 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
   long start = index * lines_per_thread;
   long end = start + lines_per_thread;
 
+  int query_position = 0;
+
   int current_level = 0;
-  char *looking_for = "user";
-  int looking_for_length = 4;
+  char looking_for_type = query[query_position++];
+
+  int looking_for_length;
+  char *looking_for;
+
+  switch (looking_for_type) {
+    case 0x01: // Dot expression
+      looking_for_length = 0;
+      int i = 0;
+      int b;
+
+      while (((b = query[query_position++]) & 0x80) != 0) {
+        looking_for_length |= (b & 0x7F) << i;
+        i += 7;
+        assert(i <= 35);
+      }
+      looking_for_length = looking_for_length | (b << i);
+
+      looking_for = query + query_position;
+      query_position += looking_for_length;
+
+      break;
+    default:
+      assert(false);
+      break;
+  }
 
   for (long i = start; i < end && i < new_line_index_size; i += 1) {
     result[i] = -1;
@@ -49,15 +75,34 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
           continue;
         }
 
-        // This means we are at the correct key, so we'll increase our level
-        if (current_level == 0) {
-          current_level++;
-          looking_for = "lang";
-        } else if (current_level == 1) {
-          result[i] = j;
-          break;
+        looking_for_type = query[query_position++];
+
+        switch (looking_for_type) {
+          case 0x00: // End
+            result[i] = j;
+            goto end_single_line;
+          case 0x01: // Dot expression
+            looking_for_length = 0;
+            int i = 0;
+            int b;
+
+            while (((b = query[query_position++]) & 0x80) != 0) {
+              looking_for_length |= (b & 0x7F) << i;
+              i += 7;
+              assert(i <= 35);
+            }
+            looking_for_length = looking_for_length | (b << i);
+
+            looking_for = query + query_position;
+            query_position += looking_for_length;
+
+            break;
+          default:
+            assert(false);
+            break;
         }
       }
+      end_single_line:
     }
   }
 }

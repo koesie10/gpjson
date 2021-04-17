@@ -1,6 +1,7 @@
 package com.koenv.gpjson.sequential;
 
 import com.koenv.gpjson.debug.Timings;
+import com.koenv.gpjson.jsonpath.ReadableIRByteBuffer;
 import com.koenv.gpjson.stages.LeveledBitmapsIndex;
 
 import java.util.ArrayList;
@@ -120,15 +121,26 @@ public class Sequential {
         }
     }
 
-    public static long[] findValue(byte[] file, long[] newlineIndex, long[] stringIndex, long[] leveledBitmapsIndex) {
+    public static long[] findValue(byte[] file, long[] newlineIndex, long[] stringIndex, long[] leveledBitmapsIndex, ReadableIRByteBuffer query) {
         Timings.TIMINGS.start("Sequential#findValue");
 
         try {
             int levelSize = (file.length + 64 - 1) / 64;
 
             int currentLevel = 0;
-            byte[] lookingFor = new byte[]{'u', 's', 'e', 'r'};
-            int lookingForLength = 4;
+            int lookingForType = query.readByte();
+
+            int lookingForLength;
+            byte[] lookingFor;
+
+            switch (lookingForType) {
+                case 0x01: // Dot expression
+                    lookingForLength = query.readVarint();
+                    lookingFor = query.readBytes(lookingForLength);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Invalid query type " + lookingForType);
+            }
 
             long[] result = new long[newlineIndex.length];
             Arrays.fill(result, -1);
@@ -137,6 +149,7 @@ public class Sequential {
                 int newLineStart = (int) newlineIndex[i];
                 int newLineEnd = (i + 1 < newlineIndex.length) ? (int) newlineIndex[i + 1] : file.length;
 
+                new_line_loop:
                 for (int j = newLineStart; j < newLineEnd && j < file.length; j += 1) {
                     boolean isStructural = (leveledBitmapsIndex[levelSize * currentLevel + j / 64] & (1L << j % 64)) != 0;
 
@@ -171,12 +184,19 @@ public class Sequential {
                         }
 
                         // This means we are at the correct key, so we'll increase our level
-                        if (currentLevel == 0) {
-                            currentLevel++;
-                            lookingFor = new byte[]{'l', 'a', 'n', 'g'};
-                        } else if (currentLevel == 1) {
-                            result[i] = j;
-                            break;
+                        lookingForType = query.readByte();
+
+                        switch (lookingForType) {
+                            case 0x00:
+                                result[i] = j;
+                                break new_line_loop;
+                            case 0x01: // Dot expression
+                                currentLevel++;
+                                lookingForLength = query.readVarint();
+                                lookingFor = query.readBytes(lookingForLength);
+                                break;
+                            default:
+                                throw new IllegalArgumentException("Invalid query type " + lookingForType);
                         }
                     }
                 }

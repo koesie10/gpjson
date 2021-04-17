@@ -2,7 +2,10 @@ package com.koenv.gpjson.functions;
 
 import com.koenv.gpjson.GPJSONContext;
 import com.koenv.gpjson.GPJSONException;
+import com.koenv.gpjson.debug.GPUUtils;
 import com.koenv.gpjson.gpu.*;
+import com.koenv.gpjson.jsonpath.JSONPathLexer;
+import com.koenv.gpjson.jsonpath.JSONPathParser;
 import com.koenv.gpjson.kernel.GPJSONKernel;
 import com.koenv.gpjson.stages.LeveledBitmapsIndex;
 import com.koenv.gpjson.stages.NewlineIndex;
@@ -62,10 +65,16 @@ public class QueryGPUFunction extends Function {
             throw new GPJSONException("Failed to get size of file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         }
 
+        ByteBuffer compiledQuery = new JSONPathParser(new JSONPathLexer(query)).compile().toByteBuffer();
+
         StringBuilder returnValue = new StringBuilder();
 
-        try (ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size)) {
+        try (
+                ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size);
+                ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(compiledQuery.capacity())
+        ) {
             readFile(fileMemory, file, size);
+            queryMemory.loadFrom(compiledQuery);
 
             end = System.nanoTime();
             long duration = end - start;
@@ -125,6 +134,10 @@ public class QueryGPUFunction extends Function {
 
                             kernelArguments.add(UnsafeHelper.createInteger64Object(levelSize));
                             kernelArguments.add(UnsafeHelper.createInteger32Object(LeveledBitmapsIndex.NUM_LEVELS));
+
+                            kernelArguments.add(UnsafeHelper.createPointerObject(queryMemory));
+                            kernelArguments.add(UnsafeHelper.createInteger32Object(compiledQuery.capacity()));
+
                             kernelArguments.add(UnsafeHelper.createPointerObject(result));
 
                             start = System.nanoTime();
@@ -138,7 +151,7 @@ public class QueryGPUFunction extends Function {
 
                             System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
-                            /*context.getCudaRuntime().timings.start("write_result");
+                            context.getCudaRuntime().timings.start("write_result");
                             byte[] values = GPUUtils.readBytes(fileMemory);
 
                             long[] returnValues = GPUUtils.readLongs(result);
@@ -155,7 +168,7 @@ public class QueryGPUFunction extends Function {
 
                                 returnValue.append('\n');
                             }
-                            context.getCudaRuntime().timings.end();*/
+                            context.getCudaRuntime().timings.end();
                         }
                     }
                 }
