@@ -12,9 +12,6 @@ __global__ void create_combined_escape_newline_index(char *file, long n, bool *e
   // Get the previous carry
   bool carry = index == 0 ? false : escape_carry_index[index - 1];
 
-  // Temporary variable for storing the current bit index
-  long bit_index = 0;
-
   // These are used for checking that not everything is escaped, because
   // we cannot deal with that scenario since that requires depending on all
   // previous carries, rather than just the previous carry.
@@ -35,7 +32,7 @@ __global__ void create_combined_escape_newline_index(char *file, long n, bool *e
     // We do it here because we are actually setting the character that
     // is escaped, and not the escape character itself.
     if (carry == 1) {
-      bit_index = bit_index | (1L << (i % 64));
+      escape_index[i / 64] |= (1L << (i % 64));
     }
 
     if (value == '\\') {
@@ -48,18 +45,6 @@ __global__ void create_combined_escape_newline_index(char *file, long n, bool *e
     if (value == '\n') {
       newline_index[newline_offset++] = i;
     }
-
-    // If we are at the end of boundary, set our result.
-    if (i % 64 == 63) {
-      escape_index[i / 64] = bit_index;
-      bit_index = 0;
-    }
-  }
-
-  if (n < end && (final_loop_iteration - 1) % 64 != 63L && n - start > 0) {
-    // In the final thread with data, we need to do this to make sure the last longs are actually set
-    int final_index = (final_loop_iteration - 1) / 64;
-    escape_index[final_index] = bit_index;
   }
 
   // We do not expect to see a run of all backslashes
