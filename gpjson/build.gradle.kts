@@ -3,6 +3,7 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 plugins {
     id("com.github.johnrengelman.shadow")
     `java-library`
+    id("com.koenv.gpjson.truffle-nfi-test")
 }
 
 val graalVmVersion: String by project
