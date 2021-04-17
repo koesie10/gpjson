@@ -18,6 +18,7 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,8 +28,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class QueryGPUFunction extends Function {
-    private static final int FILE_READ_BUFFER = 1 << 20;
-
     private final GPJSONContext context;
 
     public QueryGPUFunction(GPJSONContext context) {
@@ -75,7 +74,6 @@ public class QueryGPUFunction extends Function {
                 ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(compiledQueryBuffer.capacity())
         ) {
             readFile(fileMemory, file, size);
-            queryMemory.loadFrom(compiledQueryBuffer);
 
             end = System.nanoTime();
             long duration = end - start;
@@ -83,6 +81,8 @@ public class QueryGPUFunction extends Function {
             double speed = size / durationSeconds;
 
             System.out.printf("Reading file done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+
+            queryMemory.loadFrom(compiledQueryBuffer);
 
             start = System.nanoTime();
 
@@ -174,32 +174,17 @@ public class QueryGPUFunction extends Function {
     private void readFile(ManagedGPUPointer memory, Path file, long expectedSize) {
         context.getCudaRuntime().timings.start("readFile");
 
-        ByteBuffer buffer = ByteBuffer.allocateDirect(FILE_READ_BUFFER);
-        UnsafeHelper.ByteArray byteArray = UnsafeHelper.createByteArray(buffer);
-
-        try (FileChannel channel = FileChannel.open(file);) {
+        try (FileChannel channel = FileChannel.open(file)) {
             if (channel.size() != expectedSize) {
                 throw new GPJSONException("Size of file has changed while reading");
             }
 
-            long offset = 0;
+            MappedByteBuffer mappedBuffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+            mappedBuffer.load();
 
-            while (true) {
-                buffer.clear();
+            UnsafeHelper.ByteArray byteArray = UnsafeHelper.createByteArray(mappedBuffer);
 
-                int numBytes = channel.read(buffer);
-                if (numBytes <= 0) {
-                    break;
-                }
-
-                if (offset + numBytes > expectedSize) {
-                    throw new GPJSONException("Size of file has changed while reading");
-                }
-
-                context.getCudaRuntime().cudaMemcpy(memory.getPointer().getRawPointer() + offset, byteArray.getAddress(), numBytes, CUDAMemcpyKind.HOST_TO_DEVICE);
-
-                offset += numBytes;
-            }
+            context.getCudaRuntime().cudaMemcpy(memory.getPointer().getRawPointer(), byteArray.getAddress(), channel.size(), CUDAMemcpyKind.HOST_TO_DEVICE);
         } catch (IOException e) {
             throw new GPJSONException("Failed to open file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         } finally {

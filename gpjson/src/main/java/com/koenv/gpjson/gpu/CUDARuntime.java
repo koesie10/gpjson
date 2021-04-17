@@ -224,12 +224,29 @@ public class CUDARuntime {
     }
 
     @CompilerDirectives.TruffleBoundary
+    public void cudaMemcpyAsync(long destPointer, long fromPointer, long numBytesToCopy, CUDAMemcpyKind kind) {
+        timings.start("cudaMemcpyAsync");
+        try {
+            Object callable = CUDARuntimeFunction.CUDA_MEMCPY_ASYNC.getSymbol(this);
+            if (numBytesToCopy < 0) {
+                throw new IllegalArgumentException("requested negative number of bytes to copy " + numBytesToCopy);
+            }
+            Object result = INTEROP.execute(callable, destPointer, fromPointer, numBytesToCopy, kind.getKind());
+            checkCUDAReturnCode(result, "cudaMemcpyAsync");
+        } catch (InteropException e) {
+            throw new GPJSONException(e);
+        } finally {
+            timings.end();
+        }
+    }
+
+    @CompilerDirectives.TruffleBoundary
     public void cudaMemset(long pointer, int value, long count) {
         timings.start("cudaMemset");
         try {
             Object callable = CUDARuntimeFunction.CUDA_MEMSET.getSymbol(this);
             Object result = INTEROP.execute(callable, pointer, value, count);
-            checkCUDAReturnCode(result, "cudaMemcpy");
+            checkCUDAReturnCode(result, "cudaMemset");
         } catch (InteropException e) {
             throw new GPJSONException(e);
         } finally {

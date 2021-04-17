@@ -165,6 +165,21 @@ public enum CUDARuntimeFunction implements CUDAFunction.Spec {
             return NoneValue.get();
         }
     },
+    CUDA_MEMCPY_ASYNC("cudaMemcpyAsync", "(pointer, pointer, uint64, sint32): sint32") {
+        @Override
+        @CompilerDirectives.TruffleBoundary
+        public Object call(CUDARuntime cudaRuntime, Object[] args) throws InteropException {
+            checkArgumentLength(args, 4);
+            long destPointer = expectLong(args[0]);
+            long fromPointer = expectLong(args[1]);
+            long numBytesToCopy = expectPositiveLong(args[2]);
+            // cudaMemcpyKind from driver_types.h (default: direction of transfer is
+            // inferred from the pointer values, uses virtual addressing)
+            int kind = expectInt(args[3]);
+            callSymbol(cudaRuntime, destPointer, fromPointer, numBytesToCopy, kind);
+            return NoneValue.get();
+        }
+    },
     CUDA_MEMSET("cudaMemset", "(pointer, uint32, uint64): sint32") {
         @Override
         @CompilerDirectives.TruffleBoundary
