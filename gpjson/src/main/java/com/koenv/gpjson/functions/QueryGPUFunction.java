@@ -73,6 +73,7 @@ public class QueryGPUFunction extends Function {
                 ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size);
                 ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(compiledQueryBuffer.capacity())
         ) {
+            start = System.nanoTime();
             readFile(fileMemory, file, size);
 
             end = System.nanoTime();
