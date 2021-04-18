@@ -21,7 +21,7 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
     char *looking_for;
 
     switch (looking_for_type) {
-      case 0x01: // Dot expression
+      case 0x01: {// Dot expression
         looking_for_length = 0;
         int i = 0;
         int b;
@@ -37,9 +37,11 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
         query_position += looking_for_length;
 
         break;
-      default:
+      }
+      default: {
         assert(false);
         break;
+      }
     }
 
     for (long j = new_line_start; j < new_line_end && j < n; j += 1) {
@@ -78,10 +80,11 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
         looking_for_type = query[query_position++];
 
         switch (looking_for_type) {
-          case 0x00: // End
+          case 0x00: { // End
             result[i] = j;
             goto end_single_line;
-          case 0x01: // Dot expression
+          }
+          case 0x01: { // Dot expression
             looking_for_length = 0;
             int i = 0;
             int b;
@@ -99,12 +102,14 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
             current_level++;
 
             break;
-          default:
+          }
+          default: {
             assert(false);
             break;
+          }
         }
       }
-      end_single_line:
+      end_single_line: ;
     }
   }
 }
