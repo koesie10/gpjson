@@ -3,7 +3,7 @@ package com.koenv.gpjson.functions;
 import com.koenv.gpjson.GPJSONContext;
 import com.koenv.gpjson.GPJSONException;
 import com.koenv.gpjson.gpu.*;
-import com.koenv.gpjson.jsonpath.JSONPathLexer;
+import com.koenv.gpjson.jsonpath.JSONPathScanner;
 import com.koenv.gpjson.jsonpath.JSONPathParser;
 import com.koenv.gpjson.jsonpath.JSONPathResult;
 import com.koenv.gpjson.kernel.GPJSONKernel;
@@ -64,7 +64,7 @@ public class QueryGPUFunction extends Function {
             throw new GPJSONException("Failed to get size of file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         }
 
-        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathLexer(query)).compile();
+        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
         ByteBuffer compiledQueryBuffer = compiledQuery.getIr().toByteBuffer();
 
         StringBuilder returnValue = new StringBuilder();

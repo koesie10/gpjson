@@ -11,4 +11,8 @@ public class JSONPathException extends RuntimeException {
     public JSONPathException(Throwable cause) {
         super(cause);
     }
+
+    public JSONPathException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

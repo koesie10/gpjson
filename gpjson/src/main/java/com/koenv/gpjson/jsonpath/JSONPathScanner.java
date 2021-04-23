@@ -1,10 +1,10 @@
 package com.koenv.gpjson.jsonpath;
 
-public class JSONPathLexer {
+public class JSONPathScanner {
     private final String string;
     private int position = -1;
 
-    public JSONPathLexer(String string) {
+    public JSONPathScanner(String string) {
         this.string = string;
     }
 
@@ -41,5 +41,17 @@ public class JSONPathLexer {
         if (c != nextChar) {
             throw new JSONPathException("Expected character '" + c + "', got character '" + nextChar + "' at " + position);
         }
+    }
+
+    public JSONPathException error(String errorMessage) {
+        char currentChar = this.string.charAt(position);
+
+        return new JSONPathException(errorMessage + " at " + position + " ('" + currentChar + "')");
+    }
+
+    public JSONPathException errorNext(String errorMessage) {
+        char currentChar = this.string.charAt(position + 1);
+
+        return new JSONPathException(errorMessage + " at " + (position + 1) + " ('" + currentChar + "')");
     }
 }

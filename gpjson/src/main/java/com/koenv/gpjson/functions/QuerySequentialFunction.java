@@ -35,7 +35,7 @@ public class QuerySequentialFunction extends Function {
             throw new RuntimeException(e);
         }
 
-        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathLexer(query)).compile();
+        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
 
         long[] newlineIndex = Sequential.createNewlineIndex(file);
         long[] stringIndex = Sequential.createStringIndex(file);

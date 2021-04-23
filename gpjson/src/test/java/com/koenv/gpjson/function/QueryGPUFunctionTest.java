@@ -1,6 +1,6 @@
 package com.koenv.gpjson.function;
 
-import com.koenv.gpjson.jsonpath.JSONPathLexer;
+import com.koenv.gpjson.jsonpath.JSONPathScanner;
 import com.koenv.gpjson.jsonpath.JSONPathParser;
 import com.koenv.gpjson.jsonpath.JSONPathResult;
 import com.koenv.gpjson.sequential.Sequential;
@@ -41,7 +41,7 @@ public class QueryGPUFunctionTest {
     @Test
     public void twitterSmallSequential() throws IOException {
         byte[] file = Files.readAllBytes(Paths.get("out/twitter_really_small.ldjson"));
-        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathLexer("$.user.lang")).compile();
+        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner("$.user.lang")).compile();
 
         long[] newlineIndex = Sequential.createNewlineIndex(file);
         long[] stringIndex = Sequential.createStringIndex(file);
