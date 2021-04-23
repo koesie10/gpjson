@@ -34,7 +34,7 @@ public class JSONPathParser {
                 compileIndexExpression();
                 break;
             default:
-                throw new JSONPathException("Unsupported expression type '" + c + "'");
+                throw scanner.errorNext("Unsupported expression type");
         }
     }
 
@@ -42,12 +42,12 @@ public class JSONPathParser {
         scanner.expectChar('.');
 
         if (scanner.peek() == '.') {
-            throw new JSONPathException("Unsupported recursive descent path");
+            throw scanner.errorNext("Unsupported recursive descent path");
         }
 
         String property = readProperty();
         if (property.isEmpty()) {
-            throw new JSONPathException("Unexpected empty property");
+            throw scanner.error("Unexpected empty property");
         }
 
         createPropertyIR(property);
@@ -63,7 +63,7 @@ public class JSONPathParser {
         if (scanner.peek() == '\'' || scanner.peek() == '"') {
             String property = readQuotedString();
             if (property.isEmpty()) {
-                throw new JSONPathException("Unexpected empty property");
+                throw scanner.error("Unexpected empty property");
             }
 
             createPropertyIR(property);
@@ -104,7 +104,7 @@ public class JSONPathParser {
         while (scanner.hasNext()) {
             char c = scanner.peek();
             if (c == ' ') {
-                throw new JSONPathException("Unexpected space");
+                throw scanner.errorNext("Unexpected space");
             } else if (c == '.' || c == '[') {
                 break;
             }
@@ -120,7 +120,7 @@ public class JSONPathParser {
     private String readQuotedString() {
         char quoteCharacter = scanner.next();
         if (quoteCharacter != '\'' && quoteCharacter != '"') {
-            throw new JSONPathException("Invalid quoted string");
+            throw scanner.error("Invalid quoted string");
         }
 
         int startPosition = scanner.position();
