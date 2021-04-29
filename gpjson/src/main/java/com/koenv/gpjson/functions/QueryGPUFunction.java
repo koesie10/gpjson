@@ -2,6 +2,8 @@ package com.koenv.gpjson.functions;
 
 import com.koenv.gpjson.GPJSONContext;
 import com.koenv.gpjson.GPJSONException;
+import com.koenv.gpjson.GPJSONResultValue;
+import com.koenv.gpjson.debug.GPUUtils;
 import com.koenv.gpjson.gpu.*;
 import com.koenv.gpjson.jsonpath.JSONPathScanner;
 import com.koenv.gpjson.jsonpath.JSONPathParser;
@@ -15,6 +17,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import org.graalvm.polyglot.Value;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -67,7 +70,8 @@ public class QueryGPUFunction extends Function {
         JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
         ByteBuffer compiledQueryBuffer = compiledQuery.getIr().toByteBuffer();
 
-        StringBuilder returnValue = new StringBuilder();
+        long[] returnValue;
+        //StringBuilder returnValue = new StringBuilder();
 
         try (
                 ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size);
@@ -143,6 +147,8 @@ public class QueryGPUFunction extends Function {
 
                         System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
+                        returnValue = GPUUtils.readLongs(result);
+
                         /*context.getCudaRuntime().timings.start("write_result");
                         byte[] values = GPUUtils.readBytes(fileMemory);
 
@@ -169,7 +175,8 @@ public class QueryGPUFunction extends Function {
         // queryGPU
         context.getCudaRuntime().timings.end();
 
-        return returnValue.toString();
+        //return returnValue.toString();
+        return new GPJSONResultValue(returnValue);
     }
 
     private void readFile(ManagedGPUPointer memory, Path file, long expectedSize) {

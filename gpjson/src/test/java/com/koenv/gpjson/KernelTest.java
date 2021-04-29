@@ -5,23 +5,13 @@ import com.koenv.gpjson.gpu.CUDAMemcpyKind;
 import com.koenv.gpjson.gpu.CUDARuntime;
 import com.koenv.gpjson.gpu.ManagedGPUPointer;
 import com.koenv.gpjson.gpu.UnsafeHelper;
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.PolyglotAccess;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 
-public class KernelTest {
-    private static Context context = Context.newBuilder("nfi", "gpjson")
-            .allowPolyglotAccess(PolyglotAccess.ALL)
-            .allowNativeAccess(true)
-            .build();
-
+public class KernelTest extends GPJSONTest {
     protected CUDARuntime cudaRuntime;
 
     @BeforeEach
@@ -37,21 +27,6 @@ public class KernelTest {
     @AfterEach
     public void tearDown() {
         context.leave();
-    }
-
-    protected byte[] readFile(String name) throws IOException {
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(name)) {
-            if (is == null) {
-                throw new FileNotFoundException("File " + name + " not found in resources");
-            }
-
-            ByteArrayOutputStream result = new ByteArrayOutputStream();
-            byte[] buffer = new byte[1 << 20];
-            for (int length; (length = is.read(buffer)) != -1; ) {
-                result.write(buffer, 0, length);
-            }
-            return result.toByteArray();
-        }
     }
 
     protected ManagedGPUPointer readFileToGPU(String name) throws IOException {

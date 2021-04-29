@@ -14,6 +14,7 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
 
     int current_level = 0;
     int query_position = 0;
+    long current_level_end = new_line_end;
 
     char looking_for_type = query[query_position++];
 
@@ -47,12 +48,11 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
       }
     }
 
-    for (long j = new_line_start; j < new_line_end && j < n; j += 1) {
+    for (long j = new_line_start; j < current_level_end && j < n; j += 1) {
       bool is_structural = (leveled_bitmaps_index[level_size * current_level + j / 64] & (1L << j % 64)) != 0;
 
       bool move_to_next_level = false;
 
-      // TODO: Limit search to only the current part of the current level, rather than everything following it
       if (looking_for_type == 0x01) {
         if (is_structural && file[j] == ':') {
           // Start looking for the end of the string
@@ -150,6 +150,15 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
           }
           default: {
             assert(false);
+            break;
+          }
+        }
+
+        // Now we need to find the end of the previous level (i.e. current_level - 1)
+        for (long m = j + 1; m < current_level_end; m += 1) {
+          bool is_structural = (leveled_bitmaps_index[level_size * (current_level - 1) + m / 64] & (1L << m % 64)) != 0;
+          if (is_structural) {
+            current_level_end = m;
             break;
           }
         }
