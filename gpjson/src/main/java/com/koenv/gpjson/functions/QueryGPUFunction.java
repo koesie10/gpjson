@@ -2,13 +2,13 @@ package com.koenv.gpjson.functions;
 
 import com.koenv.gpjson.GPJSONContext;
 import com.koenv.gpjson.GPJSONException;
-import com.koenv.gpjson.result.GPJSONResultValue;
 import com.koenv.gpjson.debug.GPUUtils;
 import com.koenv.gpjson.gpu.*;
-import com.koenv.gpjson.jsonpath.JSONPathScanner;
 import com.koenv.gpjson.jsonpath.JSONPathParser;
 import com.koenv.gpjson.jsonpath.JSONPathResult;
+import com.koenv.gpjson.jsonpath.JSONPathScanner;
 import com.koenv.gpjson.kernel.GPJSONKernel;
+import com.koenv.gpjson.result.GPJSONResultValue;
 import com.koenv.gpjson.stages.CombinedIndex;
 import com.koenv.gpjson.stages.CombinedIndexResult;
 import com.koenv.gpjson.stages.LeveledBitmapsIndex;
@@ -153,10 +153,24 @@ public class QueryGPUFunction extends Function {
             }
         }
 
+        context.getCudaRuntime().timings.start("openFileChannel");
+
+        MappedByteBuffer mappedBuffer;
+        try {
+            FileChannel channel = FileChannel.open(file);
+
+            mappedBuffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+            mappedBuffer.load();
+        } catch (IOException e) {
+            throw new GPJSONException("Failed to open file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+        }
+
+        context.getCudaRuntime().timings.end();
+
         // queryGPU
         context.getCudaRuntime().timings.end();
 
-        return new GPJSONResultValue(file, numberOfReturnValues, returnValue);
+        return new GPJSONResultValue(file, numberOfReturnValues, returnValue, mappedBuffer);
     }
 
     private void readFile(ManagedGPUPointer memory, Path file, long expectedSize) {

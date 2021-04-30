@@ -8,6 +8,8 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 
+import java.nio.MappedByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.TreeMap;
 
@@ -18,11 +20,13 @@ public class GPJSONResultValue implements TruffleObject {
     private final Path filePath;
     private final long numberOfElements;
     private final long[] value;
+    private final MappedByteBuffer file;
 
-    public GPJSONResultValue(Path filePath, long numberOfElements, long[] value) {
+    public GPJSONResultValue(Path filePath, long numberOfElements, long[] value, MappedByteBuffer file) {
         this.filePath = filePath;
         this.numberOfElements = numberOfElements;
         this.value = value;
+        this.file = file;
 
         registerFunction(new GPJSONResultToStringFunction(this));
     }
@@ -51,7 +55,19 @@ public class GPJSONResultValue implements TruffleObject {
             throw InvalidArrayIndexException.create(index);
         }
 
-        return value[(int) index * 2];
+        int valueStart = (int) value[(int) (index * 2)];
+
+        if (valueStart == -1) {
+            return NullValue.INSTANCE;
+        }
+
+        int valueEnd = (int) value[(int) (index * 2 + 1)];
+
+        byte[] value = new byte[valueEnd - valueStart];
+        file.position(valueStart);
+        file.get(value);
+
+        return new String(value, StandardCharsets.UTF_8);
     }
 
     @ExportMessage
