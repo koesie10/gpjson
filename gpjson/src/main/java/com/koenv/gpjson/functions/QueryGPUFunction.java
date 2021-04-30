@@ -2,7 +2,7 @@ package com.koenv.gpjson.functions;
 
 import com.koenv.gpjson.GPJSONContext;
 import com.koenv.gpjson.GPJSONException;
-import com.koenv.gpjson.GPJSONResultValue;
+import com.koenv.gpjson.result.GPJSONResultValue;
 import com.koenv.gpjson.debug.GPUUtils;
 import com.koenv.gpjson.gpu.*;
 import com.koenv.gpjson.jsonpath.JSONPathScanner;
@@ -17,7 +17,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import org.graalvm.polyglot.Value;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -71,7 +70,7 @@ public class QueryGPUFunction extends Function {
         ByteBuffer compiledQueryBuffer = compiledQuery.getIr().toByteBuffer();
 
         long[] returnValue;
-        //StringBuilder returnValue = new StringBuilder();
+        long numberOfReturnValues;
 
         try (
                 ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size);
@@ -115,7 +114,7 @@ public class QueryGPUFunction extends Function {
 
                     System.out.printf("Creating leveled bitmaps index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
-                    try (ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements(), Type.SINT64)) {
+                    try (ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements() * 2, Type.SINT64)) {
                         Kernel kernel = context.getCudaRuntime().getKernel(GPJSONKernel.FIND_VALUE);
 
                         List<UnsafeHelper.MemoryObject> kernelArguments = new ArrayList<>();
@@ -147,26 +146,8 @@ public class QueryGPUFunction extends Function {
 
                         System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
+                        numberOfReturnValues = newlineIndex.numberOfElements();
                         returnValue = GPUUtils.readLongs(result);
-
-                        /*context.getCudaRuntime().timings.start("write_result");
-                        byte[] values = GPUUtils.readBytes(fileMemory);
-
-                        long[] returnValues = GPUUtils.readLongs(result);
-                        for (long value : returnValues) {
-                            returnValue.append(value);
-
-                            if (value > -1) {
-                                returnValue.append(": ");
-
-                                for (int m = 0; m < 8; m++) {
-                                    returnValue.append((char) values[(int) value + m]);
-                                }
-                            }
-
-                            returnValue.append('\n');
-                        }
-                        context.getCudaRuntime().timings.end();*/
                     }
                 }
             }
@@ -175,8 +156,7 @@ public class QueryGPUFunction extends Function {
         // queryGPU
         context.getCudaRuntime().timings.end();
 
-        //return returnValue.toString();
-        return new GPJSONResultValue(returnValue);
+        return new GPJSONResultValue(file, numberOfReturnValues, returnValue);
     }
 
     private void readFile(ManagedGPUPointer memory, Path file, long expectedSize) {

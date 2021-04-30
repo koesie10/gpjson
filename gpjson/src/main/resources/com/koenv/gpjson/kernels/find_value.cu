@@ -8,7 +8,7 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
   long end = start + lines_per_thread;
 
   for (long i = start; i < end && i < new_line_index_size; i += 1) {
-    result[i] = -1;
+    result[i*2] = -1;
     long new_line_start = new_line_index[i];
     long new_line_end = (i + 1 < new_line_index_size) ? new_line_index[i+1] : n;
 
@@ -97,7 +97,20 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
 
         switch (looking_for_type) {
           case 0x00: { // End
-            result[i] = j;
+            // +1 because we want to skip the colon/square open bracket
+            result[i*2] = j + 1;
+
+            long value_end;
+            // Now we need to find the end of the value
+            for (value_end = j + 1; value_end < current_level_end; value_end += 1) {
+              bool is_structural = (leveled_bitmaps_index[level_size * current_level + value_end / 64] & (1L << value_end % 64)) != 0;
+              if (is_structural) {
+                break;
+              }
+            }
+
+            result[i*2+1] = value_end;
+
             goto end_single_line;
           }
           case 0x01: { // Property expression
