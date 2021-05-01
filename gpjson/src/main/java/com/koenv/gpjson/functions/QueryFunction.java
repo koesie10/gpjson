@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class QueryFunction extends Function {
@@ -178,17 +179,28 @@ public class QueryFunction extends Function {
 
                     System.out.printf("Creating leveled bitmaps index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
+                    long singleResultSize = newlineIndex.numberOfElements() * 2 * Type.SINT64.getSizeBytes();
+
                     try (
-                            ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements() * 2, Type.SINT64);
-                            ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(maxQuerySize)
+                            ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements() * 2 * compiledQueries.size(), Type.SINT64);
+                            ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(maxQuerySize * compiledQueries.size())
                     ) {
                         numberOfReturnValues = newlineIndex.numberOfElements();
+
+                        start = System.nanoTime();
+
+                        List<ManagedGPUPointer> resultMemories = IntStream.range(0, compiledQueries.size()).mapToObj(i -> new ManagedGPUPointer(context.getCudaRuntime(), new GPUPointer(result.getPointer().getRawPointer() + singleResultSize * i), singleResultSize, newlineIndex.numberOfElements(), Type.SINT64)).collect(Collectors.toList());
+                        List<ManagedGPUPointer> queryMemories = IntStream.range(0, compiledQueries.size()).mapToObj(i -> new ManagedGPUPointer(context.getCudaRuntime(), new GPUPointer(queryMemory.getPointer().getRawPointer() + maxQuerySize * i), maxQuerySize, maxQuerySize, null)).collect(Collectors.toList());
 
                         for (int i = 0; i < compiledQueries.size(); i++) {
                             JSONPathResult compiledQuery = compiledQueries.get(i);
 
                             ByteBuffer compiledQueryBuffer = compiledQuery.getIr().toByteBuffer();
-                            queryMemory.loadFrom(compiledQueryBuffer);
+
+                            ManagedGPUPointer thisResultMemory = resultMemories.get(i);
+                            ManagedGPUPointer thisQueryMemory = queryMemories.get(i);
+
+                            thisQueryMemory.loadFrom(compiledQueryBuffer);
 
                             Kernel kernel = context.getCudaRuntime().getKernel(GPJSONKernel.FIND_VALUE);
 
@@ -205,24 +217,26 @@ public class QueryFunction extends Function {
 
                             kernelArguments.add(UnsafeHelper.createInteger64Object(levelSize));
 
-                            kernelArguments.add(UnsafeHelper.createPointerObject(queryMemory));
+                            kernelArguments.add(UnsafeHelper.createPointerObject(thisQueryMemory));
                             kernelArguments.add(UnsafeHelper.createInteger32Object(compiledQueryBuffer.capacity()));
 
-                            kernelArguments.add(UnsafeHelper.createPointerObject(result));
+                            kernelArguments.add(UnsafeHelper.createPointerObject(thisResultMemory));
 
-                            start = System.nanoTime();
-
-                            kernel.execute(new Dim3(8), new Dim3(1024), 0, 0, kernelArguments);
-
-                            end = System.nanoTime();
-                            duration = end - start;
-                            durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
-                            speed = size / durationSeconds;
-
-                            System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
-
-                            returnValue[i] = GPUUtils.readLongs(result);
+                            kernel.executeAsync(new Dim3(8), new Dim3(1024), 0, 0, kernelArguments);
                         }
+
+                        context.getCudaRuntime().cudaDeviceSynchronize();
+
+                        end = System.nanoTime();
+                        duration = end - start;
+                        durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
+                        speed = size / durationSeconds;
+
+                        for (int i = 0; i < compiledQueries.size(); i++) {
+                            returnValue[i] = GPUUtils.readLongs(resultMemories.get(i));
+                        }
+
+                        System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
                     }
                 }
             }

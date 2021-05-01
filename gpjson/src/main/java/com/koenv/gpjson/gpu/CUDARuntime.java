@@ -391,6 +391,30 @@ public class CUDARuntime {
         }
     }
 
+    public void cuLaunchKernelAsync(Kernel kernel, Dim3 gridSize, Dim3 blockSize, int dynamicSharedMemoryBytes, int stream, KernelArguments args) {
+        try {
+            timings.start("cuLaunchKernelAsync", kernel.getKernelName());
+            Object callable = CUDADriverFunction.CU_LAUNCHKERNEL.getSymbol(this);
+            Object result = INTEROP.execute(callable,
+                    kernel.getKernelFunctionHandle(),
+                    gridSize.getX(),
+                    gridSize.getY(),
+                    gridSize.getZ(),
+                    blockSize.getX(),
+                    blockSize.getY(),
+                    blockSize.getZ(),
+                    dynamicSharedMemoryBytes,
+                    stream,
+                    args.getPointer(),              // pointer to kernel arguments array
+                    0                               // extra args
+            );
+            checkCUReturnCode(result, "cuLaunchKernelAsync");
+            timings.end();
+        } catch (InteropException e) {
+            throw new GPJSONException(e);
+        }
+    }
+
     @CompilerDirectives.TruffleBoundary
     private void cuInit() {
         try {

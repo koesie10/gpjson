@@ -134,4 +134,13 @@ public final class Kernel implements TruffleObject {
         }
         cudaRuntime.timings.end();
     }
+
+    public void executeAsync(Dim3 gridSize, Dim3 blockSize, int dynamicSharedMemoryBytes, int stream, List<UnsafeHelper.MemoryObject> arguments) {
+        cudaRuntime.timings.start("kernel#executeAsync", kernelName);
+        incrementLaunchCount();
+        try (KernelArguments args = new KernelArguments(arguments)) {
+            cudaRuntime.cuLaunchKernelAsync(this, gridSize, blockSize, dynamicSharedMemoryBytes, stream, args);
+        }
+        cudaRuntime.timings.end();
+    }
 }
