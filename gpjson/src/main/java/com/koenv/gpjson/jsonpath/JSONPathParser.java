@@ -1,30 +1,33 @@
 package com.koenv.gpjson.jsonpath;
 
-import java.io.StringWriter;
 import java.util.function.Predicate;
 
 public class JSONPathParser {
     private final JSONPathScanner scanner;
 
     private final IRByteBuffer output = new IRByteBuffer();
+    private final IRBuilder ir = new IRBuilder(output);
     private int maxLevel = 0;
 
     public JSONPathParser(JSONPathScanner scanner) {
         this.scanner = scanner;
     }
 
-    public JSONPathResult compile() {
+    public JSONPathParser(String string) {
+        this(new JSONPathScanner(string));
+    }
+
+    public JSONPathResult compile() throws JSONPathException {
         scanner.expectChar('$');
 
         compileNextExpression();
 
-        // Denote end
-        output.writeByte(0x00);
+        ir.end();
 
         return new JSONPathResult(output, maxLevel);
     }
 
-    private void compileNextExpression() {
+    private void compileNextExpression() throws JSONPathException {
         char c = scanner.peek();
         switch (c) {
             case '.':
@@ -34,15 +37,15 @@ public class JSONPathParser {
                 compileIndexExpression();
                 break;
             default:
-                throw scanner.errorNext("Unsupported expression type");
+                throw scanner.unsupportedNext("Unsupported expression type");
         }
     }
 
-    private void compileDotExpression() {
+    private void compileDotExpression() throws JSONPathException {
         scanner.expectChar('.');
 
         if (scanner.peek() == '.') {
-            throw scanner.errorNext("Unsupported recursive descent path");
+            throw scanner.unsupportedNext("Unsupported recursive descent");
         }
 
         String property = readProperty();
@@ -57,7 +60,7 @@ public class JSONPathParser {
         }
     }
 
-    private void compileIndexExpression() {
+    private void compileIndexExpression() throws JSONPathException {
         scanner.expectChar('[');
 
         if (scanner.peek() == '\'' || scanner.peek() == '"') {
@@ -68,9 +71,19 @@ public class JSONPathParser {
 
             createPropertyIR(property);
         } else if (scanner.peek() >= '0' && scanner.peek() <= '9') {
-            int index = readInteger(c -> c == ']');
+            int index = readInteger(c -> c == ']' || c == ':' || c == ',');
 
-            createIndexIR(index);
+            switch (scanner.peek()) {
+                case ':':
+                    throw scanner.unsupportedNext("Unsupported range index expression");
+                case ',':
+                    throw scanner.unsupportedNext("Unsupported multiple index expression");
+                case ']':
+                    createIndexIR(index);
+                    break;
+            }
+        } else if (scanner.peek() == '*') {
+            throw scanner.unsupportedNext("Unsupported wildcard expression");
         } else {
             throw scanner.errorNext("Unexpected character in index, expected ', \", or an integer");
         }
@@ -83,22 +96,18 @@ public class JSONPathParser {
     }
 
     private void createPropertyIR(String propertyName) {
-        // Type = property
-        output.writeByte(0x01);
-        output.writeString(propertyName);
+        ir.property(propertyName);
 
         maxLevel++;
     }
 
     private void createIndexIR(int index) {
-        // Type = index
-        output.writeByte(0x02);
-        output.writeVarInt(index);
+        ir.index(index);
 
         maxLevel++;
     }
 
-    private String readProperty() {
+    private String readProperty() throws JSONPathException {
         int startPosition = scanner.position();
 
         while (scanner.hasNext()) {
@@ -117,7 +126,7 @@ public class JSONPathParser {
         return scanner.substring(startPosition, endPosition);
     }
 
-    private String readQuotedString() {
+    private String readQuotedString() throws JSONPathException {
         char quoteCharacter = scanner.next();
         if (quoteCharacter != '\'' && quoteCharacter != '"') {
             throw scanner.error("Invalid quoted string");
@@ -144,11 +153,10 @@ public class JSONPathParser {
 
         scanner.expectChar(quoteCharacter);
 
-        String escapedString = scanner.substring(startPosition, endPosition);
-        return unescape(escapedString);
+        return scanner.substring(startPosition, endPosition);
     }
 
-    private int readInteger(Predicate<Character> isEndCharacter) {
+    private int readInteger(Predicate<Character> isEndCharacter) throws JSONPathException {
         int startPosition = scanner.position();
 
         while (scanner.hasNext()) {
@@ -167,85 +175,5 @@ public class JSONPathParser {
 
         String str = scanner.substring(startPosition, endPosition);
         return Integer.parseInt(str);
-    }
-
-    /**
-     * Licensed under the Apache 2.0 license
-     *
-     * @link https://github.com/json-path/JsonPath/blob/0dca7ea7f8fcd0302d326b9206dc119c10f76c52/json-path/src/main/java/com/jayway/jsonpath/internal/Utils.java#L172
-     */
-    private static String unescape(String str) {
-        if (str == null) {
-            return null;
-        }
-        int len = str.length();
-        StringWriter writer = new StringWriter(len);
-        StringBuilder unicode = new StringBuilder(4);
-        boolean hadSlash = false;
-        boolean inUnicode = false;
-        for (int i = 0; i < len; i++) {
-            char ch = str.charAt(i);
-            if (inUnicode) {
-                unicode.append(ch);
-                if (unicode.length() == 4) {
-                    try {
-                        int value = Integer.parseInt(unicode.toString(), 16);
-                        writer.write((char) value);
-                        unicode.setLength(0);
-                        inUnicode = false;
-                        hadSlash = false;
-                    } catch (NumberFormatException nfe) {
-                        throw new JSONPathException("Unable to parse unicode value: " + unicode, nfe);
-                    }
-                }
-                continue;
-            }
-            if (hadSlash) {
-                hadSlash = false;
-                switch (ch) {
-                    case '\\':
-                        writer.write('\\');
-                        break;
-                    case '\'':
-                        writer.write('\'');
-                        break;
-                    case '\"':
-                        writer.write('"');
-                        break;
-                    case 'r':
-                        writer.write('\r');
-                        break;
-                    case 'f':
-                        writer.write('\f');
-                        break;
-                    case 't':
-                        writer.write('\t');
-                        break;
-                    case 'n':
-                        writer.write('\n');
-                        break;
-                    case 'b':
-                        writer.write('\b');
-                        break;
-                    case 'u':
-                    {
-                        inUnicode = true;
-                        break;
-                    }
-                    default :
-                        writer.write(ch);
-                        break;
-                }
-                continue;
-            } else if (ch == '\\') {
-                hadSlash = true;
-                continue;
-            }
-            writer.write(ch);
-        }
-        if (hadSlash) {
-            writer.write('\\');
-        }
-        return writer.toString();
     }
 }

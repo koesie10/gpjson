@@ -46,10 +46,9 @@ public class GPJSONLibrary implements TruffleObject {
     private final UnsafeGetCUDARuntimeFunction unsafeGetCUDARuntimeFunction;
 
     public GPJSONLibrary(GPJSONContext context) {
-        this.map.put("query", new QueryFunction());
-        this.map.put("queryGPU", new QueryGPUFunction(context));
-        this.map.put("querySequential", new QuerySequentialFunction(context));
-        this.map.put("exportTimings", new ExportTimingsFunction());
+        registerFunction(new QueryFunction(context));
+        registerFunction(new QuerySequentialFunction(context));
+        registerFunction(new ExportTimingsFunction());
 
         unsafeGetCUDARuntimeFunction = new UnsafeGetCUDARuntimeFunction(context.getCudaRuntime());
     }
@@ -96,5 +95,9 @@ public class GPJSONLibrary implements TruffleObject {
         }
 
         return callLibrary.execute(readMember(member), arguments);
+    }
+
+    private void registerFunction(Function function) {
+        this.map.put(function.getName(), function);
     }
 }

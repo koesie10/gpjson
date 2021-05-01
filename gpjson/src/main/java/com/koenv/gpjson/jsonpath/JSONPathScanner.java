@@ -8,7 +8,7 @@ public class JSONPathScanner {
         this.string = string;
     }
 
-    public char next() {
+    public char next() throws JSONPathException {
         if (!hasNext()) {
             throw new JSONPathException("Expected character, got EOF at " + position);
         }
@@ -16,7 +16,7 @@ public class JSONPathScanner {
         return this.string.charAt(++position);
     }
 
-    public char peek() {
+    public char peek() throws JSONPathException {
         if (!hasNext()) {
             throw new JSONPathException("Expected character, got EOF at " + position);
         }
@@ -36,7 +36,7 @@ public class JSONPathScanner {
         return string.substring(start + 1, end + 1);
     }
 
-    public void expectChar(char c) {
+    public void expectChar(char c) throws JSONPathException {
         char nextChar = next();
         if (c != nextChar) {
             throw new JSONPathException("Expected character '" + c + "', got character '" + nextChar + "' at " + position);
@@ -53,5 +53,17 @@ public class JSONPathScanner {
         char currentChar = this.string.charAt(position + 1);
 
         return new JSONPathException(errorMessage + " at " + (position + 1) + " ('" + currentChar + "')");
+    }
+
+    public JSONPathException unsupported(String errorMessage) {
+        char currentChar = this.string.charAt(position);
+
+        return new UnsupportedJSONPathException(errorMessage + " at " + (position + 1) + " ('" + currentChar + "')");
+    }
+
+    public JSONPathException unsupportedNext(String errorMessage) {
+        char currentChar = this.string.charAt(position + 1);
+
+        return new UnsupportedJSONPathException(errorMessage + " at " + (position + 1) + " ('" + currentChar + "')");
     }
 }

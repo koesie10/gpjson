@@ -25,13 +25,13 @@ const gpjson = Polyglot.eval('gpjson', 'jsonpath');
 
 // Warmup
 for (let i = 0; i < warmupRuns; i++) {
-    gpjson.queryGPU(filename, query);
+    gpjson.query(filename, query);
 }
 
 const start = process.hrtime.bigint();
 
 for (let i = 0; i < actualRuns; i++) {
-    gpjson.queryGPU(filename, query);
+    gpjson.query(filename, query);
 }
 
 const end = process.hrtime.bigint();

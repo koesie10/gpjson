@@ -1,6 +1,7 @@
 package com.koenv.gpjson.function;
 
 import com.koenv.gpjson.GPJSONTest;
+import com.koenv.gpjson.jsonpath.JSONPathException;
 import com.koenv.gpjson.jsonpath.JSONPathParser;
 import com.koenv.gpjson.jsonpath.JSONPathResult;
 import com.koenv.gpjson.jsonpath.JSONPathScanner;
@@ -20,9 +21,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class QueryGPUFunctionTest extends GPJSONTest {
+public class QueryFunctionTest extends GPJSONTest {
     @BeforeEach
     void setUp() {
         context.enter();
@@ -36,12 +37,12 @@ public class QueryGPUFunctionTest extends GPJSONTest {
     @Test
     @Disabled("Currently only used for manual testing")
     public void twitterSmall() {
-        System.out.println(context.eval("gpjson", "jsonpath").invokeMember("queryGPU", "out/twitter_really_small.ldjson", "$.user.lang"));
+        System.out.println(context.eval("gpjson", "jsonpath").invokeMember("query", "out/twitter_really_small.ldjson", "$.user.lang"));
     }
 
     @Test
     @Disabled("Currently only used for manual testing")
-    public void twitterSmallSequential() throws IOException {
+    public void twitterSmallSequential() throws IOException, JSONPathException {
         byte[] file = Files.readAllBytes(Paths.get("out/twitter_really_small.ldjson"));
         JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner("$.user.lang")).compile();
 
@@ -74,15 +75,16 @@ public class QueryGPUFunctionTest extends GPJSONTest {
         Path tempFile = createTemporaryFile("query_gpu_function/not_found_in_current_level.ldjson");
 
         try {
-            Value result = context.eval("gpjson", "jsonpath").invokeMember("queryGPU", tempFile.toAbsolutePath().toString(), "$.a.a");
+            Value result = context.eval("gpjson", "jsonpath").invokeMember("query", tempFile.toAbsolutePath().toString(), "$.a.a");
 
-            long[] value = new long[(int) result.getArraySize()];
+            long valueCount = 0;
 
-            for (int i = 0; i < value.length; i++) {
-                value[i] = result.getArrayElement(i).asLong();
+            for (int i = 0; i < result.getArraySize(); i++) {
+                Value item = result.getArrayElement(i);
+                valueCount += item.getArraySize();
             }
 
-            assertArrayEquals(new long[]{-1, -1}, value);
+            assertEquals(0, valueCount);
         } finally {
             Files.deleteIfExists(tempFile);
         }

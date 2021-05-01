@@ -35,14 +35,19 @@ public class QuerySequentialFunction extends Function {
             throw new RuntimeException(e);
         }
 
-        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
+        JSONPathResult compiledQuery;
+        try {
+            compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
+        } catch (JSONPathException e) {
+            throw new RuntimeException(e);
+        }
 
         long[] newlineIndex = Sequential.createNewlineIndex(file);
         long[] stringIndex = Sequential.createStringIndex(file);
         long[] leveledBitmapsIndex = Sequential.createLeveledBitmapsIndex(file, stringIndex, compiledQuery.getMaxDepth());
         long[] result = Sequential.findValue(file, newlineIndex, stringIndex, leveledBitmapsIndex, compiledQuery);
 
-        // queryGPU
+        // querySequential
         context.getCudaRuntime().timings.end();
 
         return "";
