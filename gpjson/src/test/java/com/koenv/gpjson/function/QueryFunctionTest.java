@@ -80,8 +80,12 @@ public class QueryFunctionTest extends GPJSONTest {
             long valueCount = 0;
 
             for (int i = 0; i < result.getArraySize(); i++) {
-                Value item = result.getArrayElement(i);
-                valueCount += item.getArraySize();
+                Value path = result.getArrayElement(i);
+
+                for (int j = 0; j < path.getArraySize(); j++) {
+                    Value line = path.getArrayElement(j);
+                    valueCount += line.getArraySize();
+                }
             }
 
             assertEquals(0, valueCount);
