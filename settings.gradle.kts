@@ -5,5 +5,3 @@ pluginManagement {
 }
 
 include("gpjson")
-
-include("launcher")
