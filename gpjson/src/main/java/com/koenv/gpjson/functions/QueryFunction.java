@@ -7,6 +7,7 @@ import com.koenv.gpjson.debug.GPUUtils;
 import com.koenv.gpjson.gpu.*;
 import com.koenv.gpjson.jsonpath.*;
 import com.koenv.gpjson.kernel.GPJSONKernel;
+import com.koenv.gpjson.result.FallbackResultArray;
 import com.koenv.gpjson.result.ResultArray;
 import com.koenv.gpjson.stages.CombinedIndex;
 import com.koenv.gpjson.stages.CombinedIndexResult;
@@ -15,6 +16,8 @@ import com.koenv.gpjson.util.FormatUtil;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 
 import java.io.IOException;
@@ -56,9 +59,19 @@ public class QueryFunction extends Function {
 
         context.getCudaRuntime().timings.start("query");
 
-        checkArgumentLength(arguments, 2);
+        checkMinimumArgumentLength(arguments, 2);
         String filename = expectString(arguments[0], "expected filename");
         String query = expectString(arguments[1], "expected query");
+
+        QueryOptions queryOptions = new QueryOptions();
+
+        if (arguments.length > 2) {
+            try {
+                queryOptions.from(INTEROP, expectObject(arguments[2]));
+            } catch (UnsupportedMessageException | UnknownIdentifierException e) {
+                throw new GPJSONException("Invalid options", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+            }
+        }
 
         Path file = Paths.get(filename);
 
@@ -66,8 +79,12 @@ public class QueryFunction extends Function {
         try {
             compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
         } catch (UnsupportedJSONPathException e) {
-          // If the path is unsupported, we'll fall back to a Java JsonPath implementation
-          return fallbackQuery(file, query);
+            if (queryOptions.disableFallback) {
+                throw new GPJSONException("Unsupported JSON path (fallback disabled)", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+            }
+
+            // If the path is unsupported, we'll fall back to a Java JsonPath implementation
+            return fallbackQuery(file, query);
         } catch (JSONPathException e) {
             throw new GPJSONException("Unsupported JSON path", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         }
@@ -195,13 +212,13 @@ public class QueryFunction extends Function {
         JsonPath path = JsonPath.compile(query);
 
         try (Stream<String> lines = Files.lines(file, StandardCharsets.UTF_8)) {
-            return lines.parallel().map(line -> {
+            return new FallbackResultArray(lines.parallel().map(line -> {
                 try {
                     return Collections.singletonList(parseContext.parse(line).read(path).toString());
                 } catch (PathNotFoundException e) {
-                    return new ArrayList<>();
+                    return new ArrayList<String>();
                 }
-            }).collect(Collectors.toList());
+            }).collect(Collectors.toList()));
         } catch (IOException e) {
             throw new GPJSONException("Failed to read file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         } finally {

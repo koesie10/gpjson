@@ -2,11 +2,7 @@ package com.koenv.gpjson.functions;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.interop.*;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 
@@ -79,6 +75,23 @@ public abstract class Function implements TruffleObject {
             CompilerDirectives.transferToInterpreter();
             throw ArityException.create(expected, arguments.length);
         }
+    }
+
+    public static void checkMinimumArgumentLength(Object[] arguments, int expected) throws ArityException {
+        if (arguments.length < expected) {
+            CompilerDirectives.transferToInterpreter();
+            throw ArityException.create(expected, arguments.length);
+        }
+    }
+
+    public static Object expectObject(Object obj) throws UnsupportedTypeException {
+        CompilerAsserts.neverPartOfCompilation();
+
+        if (!INTEROP.hasMembers(obj)) {
+            throw UnsupportedTypeException.create(new Object[]{obj}, "expected object");
+        }
+
+        return obj;
     }
 
     // InteropLibrary implementation
