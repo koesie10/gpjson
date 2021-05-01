@@ -7,18 +7,15 @@ import com.koenv.gpjson.debug.GPUUtils;
 import com.koenv.gpjson.gpu.*;
 import com.koenv.gpjson.jsonpath.*;
 import com.koenv.gpjson.kernel.GPJSONKernel;
-import com.koenv.gpjson.result.FallbackResultArray;
-import com.koenv.gpjson.result.ResultArray;
+import com.koenv.gpjson.result.FallbackResult;
+import com.koenv.gpjson.result.Result;
 import com.koenv.gpjson.stages.CombinedIndex;
 import com.koenv.gpjson.stages.CombinedIndexResult;
 import com.koenv.gpjson.stages.LeveledBitmapsIndex;
 import com.koenv.gpjson.util.FormatUtil;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.interop.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -61,7 +58,40 @@ public class QueryFunction extends Function {
 
         checkMinimumArgumentLength(arguments, 2);
         String filename = expectString(arguments[0], "expected filename");
-        String query = expectString(arguments[1], "expected query");
+
+        List<String> queries;
+
+        try {
+            if (INTEROP.isString(arguments[1])) {
+                queries = Collections.singletonList(INTEROP.asString(arguments[1]));
+            } else if (INTEROP.hasArrayElements(arguments[1])) {
+                long queriesSize = INTEROP.getArraySize(arguments[1]);
+                // Arbitrary limit
+                if (queriesSize > 255) {
+                    throw new GPJSONException("Maximum size of queries is 255", null, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+                }
+
+                queries = new ArrayList<>((int) queriesSize);
+
+                for (long i = 0; i < queriesSize; i++) {
+                    Object item = INTEROP.readArrayElement(arguments[1], i);
+
+                    try {
+                        queries.add(INTEROP.asString(item));
+                    } catch (UnsupportedMessageException e) {
+                        throw UnsupportedTypeException.create(new Object[]{item}, "expected queries to be a string or string array");
+                    }
+                }
+            } else {
+                throw UnsupportedTypeException.create(new Object[]{arguments[1]}, "expected queries to be a string or string array");
+            }
+        } catch (UnsupportedMessageException | InvalidArrayIndexException e) {
+            throw UnsupportedTypeException.create(new Object[]{arguments[1]}, "expected queries to be a string or string array");
+        }
+
+        if (queries.size() < 1) {
+            throw UnsupportedTypeException.create(new Object[]{arguments[1]}, "expected queries to contain at least one query");
+        }
 
         QueryOptions queryOptions = new QueryOptions();
 
@@ -75,20 +105,29 @@ public class QueryFunction extends Function {
 
         Path file = Paths.get(filename);
 
-        JSONPathResult compiledQuery;
-        try {
-            compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
-        } catch (UnsupportedJSONPathException e) {
-            if (queryOptions.disableFallback) {
-                throw new GPJSONException("Unsupported JSON path (fallback disabled)", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
-            }
+        List<JSONPathResult> compiledQueries = new ArrayList<>(queries.size());
 
-            // If the path is unsupported, we'll fall back to a Java JsonPath implementation
-            return fallbackQuery(file, query);
-        } catch (JSONPathException e) {
-            throw new GPJSONException("Unsupported JSON path", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+        for (int i = 0; i < queries.size(); i++) {
+            String query = queries.get(i);
+
+            try {
+                JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
+
+                compiledQueries.add(compiledQuery);
+            } catch (UnsupportedJSONPathException e) {
+                if (queryOptions.disableFallback) {
+                    throw new GPJSONException("Unsupported JSON path (" + i + ", fallback disabled)", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+                }
+
+                // If the path is unsupported, we'll fall back to a Java JsonPath implementation
+                return fallbackQuery(file, queries);
+            } catch (JSONPathException e) {
+                throw new GPJSONException("Unsupported JSON path (" + i + ")" , e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+            }
         }
-        ByteBuffer compiledQueryBuffer = compiledQuery.getIr().toByteBuffer();
+
+        int maxDepth = compiledQueries.stream().mapToInt(query -> query.getMaxDepth()).max().getAsInt();
+        int maxQuerySize = compiledQueries.stream().mapToInt(query -> query.getIr().size()).max().getAsInt();
 
         long size;
         try {
@@ -97,12 +136,11 @@ public class QueryFunction extends Function {
             throw new GPJSONException("Failed to get size of file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         }
 
-        long[] returnValue;
+        long[][] returnValue = new long[compiledQueries.size()][];
         long numberOfReturnValues;
 
         try (
-                ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size);
-                ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(compiledQueryBuffer.capacity())
+                ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size)
         ) {
             start = System.nanoTime();
             readFile(fileMemory, file, size);
@@ -113,8 +151,6 @@ public class QueryFunction extends Function {
             double speed = size / durationSeconds;
 
             System.out.printf("Reading file done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
-
-            queryMemory.loadFrom(compiledQueryBuffer);
 
             start = System.nanoTime();
 
@@ -132,7 +168,7 @@ public class QueryFunction extends Function {
 
                 start = System.nanoTime();
 
-                LeveledBitmapsIndex leveledBitmapsIndexCreator = new LeveledBitmapsIndex(context.getCudaRuntime(), fileMemory, stringIndex, (byte) compiledQuery.getMaxDepth());
+                LeveledBitmapsIndex leveledBitmapsIndexCreator = new LeveledBitmapsIndex(context.getCudaRuntime(), fileMemory, stringIndex, (byte) maxDepth);
 
                 try (ManagedGPUPointer leveledBitmapIndex = leveledBitmapsIndexCreator.create()) {
                     end = System.nanoTime();
@@ -142,40 +178,51 @@ public class QueryFunction extends Function {
 
                     System.out.printf("Creating leveled bitmaps index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
-                    try (ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements() * 2, Type.SINT64)) {
-                        Kernel kernel = context.getCudaRuntime().getKernel(GPJSONKernel.FIND_VALUE);
-
-                        List<UnsafeHelper.MemoryObject> kernelArguments = new ArrayList<>();
-                        kernelArguments.add(UnsafeHelper.createPointerObject(fileMemory));
-                        kernelArguments.add(UnsafeHelper.createInteger64Object(fileMemory.numberOfElements()));
-                        kernelArguments.add(UnsafeHelper.createPointerObject(newlineIndex));
-                        kernelArguments.add(UnsafeHelper.createInteger64Object(newlineIndex.numberOfElements()));
-                        kernelArguments.add(UnsafeHelper.createPointerObject(stringIndex));
-                        kernelArguments.add(UnsafeHelper.createPointerObject(leveledBitmapIndex));
-                        kernelArguments.add(UnsafeHelper.createInteger64Object(leveledBitmapIndex.numberOfElements()));
-
-                        long levelSize = (fileMemory.size() + 64 - 1) / 64;
-
-                        kernelArguments.add(UnsafeHelper.createInteger64Object(levelSize));
-
-                        kernelArguments.add(UnsafeHelper.createPointerObject(queryMemory));
-                        kernelArguments.add(UnsafeHelper.createInteger32Object(compiledQueryBuffer.capacity()));
-
-                        kernelArguments.add(UnsafeHelper.createPointerObject(result));
-
-                        start = System.nanoTime();
-
-                        kernel.execute(new Dim3(8), new Dim3(1024), 0, 0, kernelArguments);
-
-                        end = System.nanoTime();
-                        duration = end - start;
-                        durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
-                        speed = size / durationSeconds;
-
-                        System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
-
+                    try (
+                            ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements() * 2, Type.SINT64);
+                            ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(maxQuerySize)
+                    ) {
                         numberOfReturnValues = newlineIndex.numberOfElements();
-                        returnValue = GPUUtils.readLongs(result);
+
+                        for (int i = 0; i < compiledQueries.size(); i++) {
+                            JSONPathResult compiledQuery = compiledQueries.get(i);
+
+                            ByteBuffer compiledQueryBuffer = compiledQuery.getIr().toByteBuffer();
+                            queryMemory.loadFrom(compiledQueryBuffer);
+
+                            Kernel kernel = context.getCudaRuntime().getKernel(GPJSONKernel.FIND_VALUE);
+
+                            List<UnsafeHelper.MemoryObject> kernelArguments = new ArrayList<>();
+                            kernelArguments.add(UnsafeHelper.createPointerObject(fileMemory));
+                            kernelArguments.add(UnsafeHelper.createInteger64Object(fileMemory.numberOfElements()));
+                            kernelArguments.add(UnsafeHelper.createPointerObject(newlineIndex));
+                            kernelArguments.add(UnsafeHelper.createInteger64Object(newlineIndex.numberOfElements()));
+                            kernelArguments.add(UnsafeHelper.createPointerObject(stringIndex));
+                            kernelArguments.add(UnsafeHelper.createPointerObject(leveledBitmapIndex));
+                            kernelArguments.add(UnsafeHelper.createInteger64Object(leveledBitmapIndex.numberOfElements()));
+
+                            long levelSize = (fileMemory.size() + 64 - 1) / 64;
+
+                            kernelArguments.add(UnsafeHelper.createInteger64Object(levelSize));
+
+                            kernelArguments.add(UnsafeHelper.createPointerObject(queryMemory));
+                            kernelArguments.add(UnsafeHelper.createInteger32Object(compiledQueryBuffer.capacity()));
+
+                            kernelArguments.add(UnsafeHelper.createPointerObject(result));
+
+                            start = System.nanoTime();
+
+                            kernel.execute(new Dim3(8), new Dim3(1024), 0, 0, kernelArguments);
+
+                            end = System.nanoTime();
+                            duration = end - start;
+                            durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
+                            speed = size / durationSeconds;
+
+                            System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+
+                            returnValue[i] = GPUUtils.readLongs(result);
+                        }
                     }
                 }
             }
@@ -198,10 +245,10 @@ public class QueryFunction extends Function {
         // query
         context.getCudaRuntime().timings.end();
 
-        return new ResultArray(file, numberOfReturnValues, returnValue, mappedBuffer);
+        return new Result(file, compiledQueries.size(), numberOfReturnValues, returnValue, mappedBuffer);
     }
 
-    private Object fallbackQuery(Path file, String query) {
+    private Object fallbackQuery(Path file, List<String> queries) {
         context.getCudaRuntime().timings.start("fallbackQuery");
 
         Configuration conf = Configuration.defaultConfiguration()
@@ -209,16 +256,39 @@ public class QueryFunction extends Function {
 
         ParseContext parseContext = JsonPath.using(conf);
 
-        JsonPath path = JsonPath.compile(query);
+        List<JsonPath> paths = queries.stream().map(JsonPath::compile).collect(Collectors.toList());
 
         try (Stream<String> lines = Files.lines(file, StandardCharsets.UTF_8)) {
-            return new FallbackResultArray(lines.parallel().map(line -> {
-                try {
-                    return Collections.singletonList(parseContext.parse(line).read(path).toString());
-                } catch (PathNotFoundException e) {
-                    return new ArrayList<String>();
+            List<List<List<String>>> results = lines.parallel().map(line -> {
+                List<List<String>> pathResults = new ArrayList<>(paths.size());
+
+                for (JsonPath path : paths) {
+                    try {
+                        pathResults.add(Collections.singletonList(parseContext.parse(line).read(path).toString()));
+                    } catch (PathNotFoundException e) {
+                        pathResults.add(Collections.emptyList());
+                    }
                 }
-            }).collect(Collectors.toList()));
+
+                return pathResults;
+            }).collect(Collectors.toList());
+
+            // The order now is line -> query -> results, while we want
+            // it to be query -> line -> results
+
+            List<List<List<String>>> transformedResults = new ArrayList<>(queries.size());
+            for (int i = 0; i < queries.size(); i++) {
+                transformedResults.add(new ArrayList<>());
+            }
+
+            for (List<List<String>> resultItem : results) {
+                // resultItem is path -> results
+                for (int i = 0; i < queries.size(); i++) {
+                    transformedResults.get(i).add(resultItem.get(i));
+                }
+            }
+
+            return new FallbackResult(transformedResults);
         } catch (IOException e) {
             throw new GPJSONException("Failed to read file", e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
         } finally {

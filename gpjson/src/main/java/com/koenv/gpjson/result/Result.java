@@ -12,22 +12,30 @@ import java.nio.MappedByteBuffer;
 import java.nio.file.Path;
 
 @ExportLibrary(InteropLibrary.class)
-public class ResultArray implements TruffleObject {
-    private final long numberOfElements;
-    private final long[] value;
+public class Result implements TruffleObject {
+    private final Path filePath;
+    private final long numberOfQueries;
+    private final long numberOfLines;
+    private final long[][] value;
     private final MappedByteBuffer file;
 
-    public ResultArray(long numberOfLines, long[] value, MappedByteBuffer file) {
-        this.numberOfElements = numberOfLines;
+    public Result(Path filePath, long numberOfQueries, long numberOfLines, long[][] value, MappedByteBuffer file) {
+        this.filePath = filePath;
+        this.numberOfQueries = numberOfQueries;
+        this.numberOfLines = numberOfLines;
         this.value = value;
         this.file = file;
     }
 
-    public long getNumberOfElements() {
-        return numberOfElements;
+    public Path getFilePath() {
+        return filePath;
     }
 
-    public long[] getValue() {
+    public long getNumberOfLines() {
+        return numberOfLines;
+    }
+
+    public long[][] getValue() {
         return value;
     }
 
@@ -43,27 +51,21 @@ public class ResultArray implements TruffleObject {
     @ExportMessage
     @CompilerDirectives.TruffleBoundary
     public Object readArrayElement(long index) throws UnsupportedMessageException, InvalidArrayIndexException {
-        if (index >= numberOfElements) {
+        if (index >= numberOfQueries) {
             throw InvalidArrayIndexException.create(index);
         }
 
-        long valueStart = index * 2;
-
-        if (value[(int) valueStart] == -1) {
-            return new ResultItem(this, valueStart, 0);
-        }
-
-        return new ResultItem(this, valueStart, 1);
+        return new ResultArray(numberOfLines, value[(int) index], file);
     }
 
     @ExportMessage
     @CompilerDirectives.TruffleBoundary
     public boolean isArrayElementReadable(long index) {
-        return index < numberOfElements;
+        return index < numberOfQueries;
     }
 
     @ExportMessage
     public long getArraySize() {
-        return numberOfElements;
+        return numberOfQueries;
     }
 }
