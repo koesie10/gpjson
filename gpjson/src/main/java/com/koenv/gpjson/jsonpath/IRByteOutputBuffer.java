@@ -5,24 +5,24 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-public class IRByteBuffer {
+public class IRByteOutputBuffer {
     private final ByteArrayOutputStream buffer;
 
-    public IRByteBuffer() {
+    public IRByteOutputBuffer() {
         this.buffer = new ByteArrayOutputStream();
     }
 
-    public IRByteBuffer writeByte(byte b) {
+    public IRByteOutputBuffer writeByte(byte b) {
         buffer.write(b);
         return this;
     }
 
-    public IRByteBuffer writeByte(int b) {
+    public IRByteOutputBuffer writeByte(int b) {
         this.writeByte((byte) (b & 0xFF));
         return this;
     }
 
-    public IRByteBuffer writeBytes(byte[] b) {
+    public IRByteOutputBuffer writeBytes(byte[] b) {
         try {
             buffer.write(b);
         } catch (IOException e) {
@@ -32,7 +32,7 @@ public class IRByteBuffer {
         return this;
     }
 
-    public IRByteBuffer writeVarInt(int i) {
+    public IRByteOutputBuffer writeVarInt(int i) {
         while((i & 0xFFFFFF80) != 0) {
             this.writeByte(i & 0x7F | 0x80);
             i >>>= 7;
@@ -42,7 +42,7 @@ public class IRByteBuffer {
         return this;
     }
 
-    public IRByteBuffer writeString(String s) {
+    public IRByteOutputBuffer writeString(String s) {
         byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
         this.writeVarInt(bytes.length);
         this.writeBytes(bytes);
@@ -67,7 +67,7 @@ public class IRByteBuffer {
         return ByteBuffer.wrap(this.toByteArray());
     }
 
-    public ReadableIRByteBuffer toReadable() {
-        return new ReadableIRByteBuffer(toWrappedByteBuffer());
+    public IRByteInputBuffer toReadable() {
+        return new IRByteInputBuffer(toWrappedByteBuffer());
     }
 }

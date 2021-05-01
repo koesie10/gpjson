@@ -1,15 +1,15 @@
 package com.koenv.gpjson.jsonpath;
 
 public class IRBuilder {
-    private final IRByteBuffer buffer;
+    private final IRByteOutputBuffer buffer;
 
     private boolean ended;
 
     public IRBuilder() {
-        this(new IRByteBuffer());
+        this(new IRByteOutputBuffer());
     }
 
-    public IRBuilder(IRByteBuffer buffer) {
+    public IRBuilder(IRByteOutputBuffer buffer) {
         this.buffer = buffer;
     }
 
@@ -38,7 +38,7 @@ public class IRBuilder {
         return this;
     }
 
-    public IRByteBuffer getBuffer() {
+    public IRByteOutputBuffer getBuffer() {
         return buffer;
     }
 

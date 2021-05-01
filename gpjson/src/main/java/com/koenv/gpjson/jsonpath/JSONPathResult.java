@@ -1,15 +1,15 @@
 package com.koenv.gpjson.jsonpath;
 
 public class JSONPathResult {
-    private final IRByteBuffer ir;
+    private final IRByteOutputBuffer ir;
     private final int maxDepth;
 
-    public JSONPathResult(IRByteBuffer ir, int maxDepth) {
+    public JSONPathResult(IRByteOutputBuffer ir, int maxDepth) {
         this.ir = ir;
         this.maxDepth = maxDepth;
     }
 
-    public IRByteBuffer getIr() {
+    public IRByteOutputBuffer getIr() {
         return ir;
     }
 

@@ -3,10 +3,10 @@ package com.koenv.gpjson.jsonpath;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-public class ReadableIRByteBuffer {
+public class IRByteInputBuffer {
     private final ByteBuffer buffer;
 
-    public ReadableIRByteBuffer(ByteBuffer buffer) {
+    public IRByteInputBuffer(ByteBuffer buffer) {
         this.buffer = buffer;
     }
 
@@ -38,6 +38,10 @@ public class ReadableIRByteBuffer {
         int stringLength = readVarint();
         byte[] bytes = readBytes(stringLength);
         return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    public boolean hasNext() {
+        return buffer.hasRemaining();
     }
 
     public void mark() {

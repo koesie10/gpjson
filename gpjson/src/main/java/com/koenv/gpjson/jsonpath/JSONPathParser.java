@@ -5,7 +5,7 @@ import java.util.function.Predicate;
 public class JSONPathParser {
     private final JSONPathScanner scanner;
 
-    private final IRByteBuffer output = new IRByteBuffer();
+    private final IRByteOutputBuffer output = new IRByteOutputBuffer();
     private final IRBuilder ir = new IRBuilder(output);
     private int maxLevel = 0;
 

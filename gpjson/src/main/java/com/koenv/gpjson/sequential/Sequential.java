@@ -2,8 +2,7 @@ package com.koenv.gpjson.sequential;
 
 import com.koenv.gpjson.debug.Timings;
 import com.koenv.gpjson.jsonpath.JSONPathResult;
-import com.koenv.gpjson.jsonpath.ReadableIRByteBuffer;
-import com.koenv.gpjson.stages.LeveledBitmapsIndex;
+import com.koenv.gpjson.jsonpath.IRByteInputBuffer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -124,7 +123,7 @@ public class Sequential {
     public static long[] findValue(byte[] file, long[] newlineIndex, long[] stringIndex, long[] leveledBitmapsIndex, JSONPathResult query) {
         Timings.TIMINGS.start("Sequential#findValue");
 
-        ReadableIRByteBuffer queryBuffer = query.getIr().toReadable();
+        IRByteInputBuffer queryBuffer = query.getIr().toReadable();
         queryBuffer.mark();
 
         try {
