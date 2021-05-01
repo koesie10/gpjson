@@ -8,7 +8,7 @@ import com.koenv.gpjson.jsonpath.JSONPathParser;
 import com.koenv.gpjson.jsonpath.JSONPathResult;
 import com.koenv.gpjson.jsonpath.JSONPathScanner;
 import com.koenv.gpjson.kernel.GPJSONKernel;
-import com.koenv.gpjson.result.GPJSONResultValue;
+import com.koenv.gpjson.result.ResultArray;
 import com.koenv.gpjson.stages.CombinedIndex;
 import com.koenv.gpjson.stages.CombinedIndexResult;
 import com.koenv.gpjson.stages.LeveledBitmapsIndex;
@@ -170,7 +170,7 @@ public class QueryGPUFunction extends Function {
         // queryGPU
         context.getCudaRuntime().timings.end();
 
-        return new GPJSONResultValue(file, numberOfReturnValues, returnValue, mappedBuffer);
+        return new ResultArray(file, numberOfReturnValues, returnValue, mappedBuffer);
     }
 
     private void readFile(ManagedGPUPointer memory, Path file, long expectedSize) {
