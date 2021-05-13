@@ -17,7 +17,10 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.*;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -25,9 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -113,6 +114,8 @@ public class QueryFunction extends Function {
             try {
                 JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
 
+                IRVisitor.accept(compiledQuery.getIr().toReadable(), new PrintingIRVisitor(System.out));
+
                 compiledQueries.add(compiledQuery);
             } catch (UnsupportedJSONPathException e) {
                 if (queryOptions.disableFallback) {
@@ -126,8 +129,9 @@ public class QueryFunction extends Function {
             }
         }
 
-        int maxDepth = compiledQueries.stream().mapToInt(query -> query.getMaxDepth()).max().getAsInt();
+        int maxDepth = compiledQueries.stream().mapToInt(JSONPathResult::getMaxDepth).max().getAsInt();
         int maxQuerySize = compiledQueries.stream().mapToInt(query -> query.getIr().size()).max().getAsInt();
+        int maxNumResults = compiledQueries.stream().mapToInt(JSONPathResult::getNumResults).max().getAsInt();
 
         long size;
         try {
@@ -137,7 +141,7 @@ public class QueryFunction extends Function {
         }
 
         long[][] returnValue = new long[compiledQueries.size()][];
-        long numberOfReturnValues;
+        long numberOfLines;
 
         try (
                 ManagedGPUPointer fileMemory = context.getCudaRuntime().allocateUnmanagedMemory(size)
@@ -179,10 +183,12 @@ public class QueryFunction extends Function {
                     System.out.printf("Creating leveled bitmaps index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
 
                     try (
-                            ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements() * 2, Type.SINT64);
+                            ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements() * 2 * maxNumResults, Type.SINT64);
                             ManagedGPUPointer queryMemory = context.getCudaRuntime().allocateUnmanagedMemory(maxQuerySize)
                     ) {
-                        numberOfReturnValues = newlineIndex.numberOfElements();
+                        context.getCudaRuntime().cudaMemset(result.getPointer().getRawPointer(), -1, result.size());
+
+                        numberOfLines = newlineIndex.numberOfElements();
 
                         for (int i = 0; i < compiledQueries.size(); i++) {
                             JSONPathResult compiledQuery = compiledQueries.get(i);
@@ -206,7 +212,7 @@ public class QueryFunction extends Function {
                             kernelArguments.add(UnsafeHelper.createInteger64Object(levelSize));
 
                             kernelArguments.add(UnsafeHelper.createPointerObject(queryMemory));
-                            kernelArguments.add(UnsafeHelper.createInteger32Object(compiledQueryBuffer.capacity()));
+                            kernelArguments.add(UnsafeHelper.createInteger32Object(maxNumResults));
 
                             kernelArguments.add(UnsafeHelper.createPointerObject(result));
 
@@ -245,7 +251,9 @@ public class QueryFunction extends Function {
         // query
         context.getCudaRuntime().timings.end();
 
-        return new Result(file, compiledQueries.size(), numberOfReturnValues, returnValue, mappedBuffer);
+        System.out.println(Arrays.deepToString(returnValue));
+
+        return new Result(file, compiledQueries.size(), numberOfLines, maxNumResults, returnValue, mappedBuffer);
     }
 
     private Object fallbackQuery(Path file, List<String> queries) {

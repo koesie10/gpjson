@@ -12,7 +12,8 @@ public class LeveledBitmapsIndex {
     public static final int BLOCK_SIZE = 1024;
 
     public static final int CARRY_INDEX_SIZE = GRID_SIZE * BLOCK_SIZE;
-    public static final byte MAX_NUM_LEVELS = 22;
+    // Should match the define in the find_value kernel
+    public static final byte MAX_NUM_LEVELS = 16;
 
     private final CUDARuntime cudaRuntime;
     private final ManagedGPUPointer fileMemory;

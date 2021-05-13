@@ -7,6 +7,12 @@ public interface IRVisitor {
 
     void visitIndex(int index);
 
+    void visitStoreResult();
+
+    void visitDown();
+
+    void visitUp();
+
     void visitEnd();
 
     static void accept(byte[] ir, IRVisitor visitor) {
@@ -15,14 +21,23 @@ public interface IRVisitor {
 
     static void accept(IRByteInputBuffer buffer, IRVisitor visitor) {
         while (buffer.hasNext()) {
-            switch (buffer.readByte()) {
-                case 0x00:
+            switch (buffer.readOpcode()) {
+                case END:
                     visitor.visitEnd();
                     break;
-                case 0x01:
+                case STORE_RESULT:
+                    visitor.visitStoreResult();
+                    break;
+                case MOVE_DOWN:
+                    visitor.visitDown();
+                    break;
+                case MOVE_UP:
+                    visitor.visitUp();
+                    break;
+                case MOVE_TO_KEY:
                     visitor.visitProperty(buffer.readString());
                     break;
-                case 0x02:
+                case MOVE_TO_INDEX:
                     visitor.visitIndex(buffer.readVarint());
                     break;
             }

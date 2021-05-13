@@ -3,6 +3,9 @@ package com.koenv.gpjson.jsonpath;
 public class IRBuilder {
     private final IRByteOutputBuffer buffer;
 
+    private int currentLevel;
+    private int numResultStores;
+
     private boolean ended;
 
     public IRBuilder() {
@@ -14,15 +17,39 @@ public class IRBuilder {
     }
 
     public IRBuilder property(String name) {
-        buffer.writeByte(0x01);
+        buffer.writeOpcode(Opcode.MOVE_TO_KEY);
         buffer.writeString(name);
 
         return this;
     }
 
     public IRBuilder index(int index) {
-        buffer.writeByte(0x02);
+        buffer.writeOpcode(Opcode.MOVE_TO_INDEX);
         buffer.writeVarInt(index);
+
+        return this;
+    }
+
+    public IRBuilder down() {
+        buffer.writeOpcode(Opcode.MOVE_DOWN);
+
+        currentLevel++;
+
+        return this;
+    }
+
+    public IRBuilder up() {
+        buffer.writeOpcode(Opcode.MOVE_UP);
+
+        currentLevel--;
+
+        return this;
+    }
+
+    public IRBuilder storeResult() {
+        buffer.writeOpcode(Opcode.STORE_RESULT);
+
+        numResultStores++;
 
         return this;
     }
@@ -33,9 +60,17 @@ public class IRBuilder {
         }
 
         ended = true;
-        buffer.writeByte(0x00);
+        buffer.writeOpcode(Opcode.END);
 
         return this;
+    }
+
+    public int getCurrentLevel() {
+        return currentLevel;
+    }
+
+    public int getNumResultStores() {
+        return numResultStores;
     }
 
     public IRByteOutputBuffer getBuffer() {

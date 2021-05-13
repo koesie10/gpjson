@@ -14,6 +14,10 @@ public class IRByteInputBuffer {
         return buffer.get();
     }
 
+    public Opcode readOpcode() {
+        return Opcode.values()[readByte()];
+    }
+
     public byte[] readBytes(int length) {
         byte[] result = new byte[length];
         buffer.get(result);

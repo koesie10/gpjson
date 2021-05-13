@@ -22,9 +22,10 @@ public class JSONPathParser {
 
         compileNextExpression();
 
+        ir.storeResult();
         ir.end();
 
-        return new JSONPathResult(output, maxLevel);
+        return new JSONPathResult(output, maxLevel, ir.getNumResultStores());
     }
 
     private void compileNextExpression() throws JSONPathException {
@@ -75,7 +76,10 @@ public class JSONPathParser {
 
             switch (scanner.peek()) {
                 case ':':
-                    throw scanner.unsupportedNext("Unsupported range index expression");
+                    compileIndexRangeExpression(index);
+
+                    // The index range expression will parse the rest
+                    return;
                 case ',':
                     throw scanner.unsupportedNext("Unsupported multiple index expression");
                 case ']':
@@ -95,14 +99,49 @@ public class JSONPathParser {
         }
     }
 
+    private void compileIndexRangeExpression(int startIndex) throws JSONPathException {
+        scanner.expectChar(':');
+
+        int endIndex = readInteger(c -> c == ']');
+
+        scanner.expectChar(']');
+
+        for (int i = startIndex; i < endIndex; i++) {
+            int startLevel = ir.getCurrentLevel();
+
+            ir.index(i);
+            ir.down();
+
+            scanner.mark();
+
+            compileNextExpression();
+
+            if (i == endIndex - 1) {
+                break;
+            } else {
+                ir.storeResult();
+            }
+
+            scanner.reset();
+
+            int endLevel = ir.getCurrentLevel();
+
+            for (int j = 0; j < endLevel - startLevel; j++) {
+                ir.up();
+            }
+        }
+    }
+
     private void createPropertyIR(String propertyName) {
         ir.property(propertyName);
+        ir.down();
 
         maxLevel++;
     }
 
     private void createIndexIR(int index) {
         ir.index(index);
+        ir.down();
 
         maxLevel++;
     }

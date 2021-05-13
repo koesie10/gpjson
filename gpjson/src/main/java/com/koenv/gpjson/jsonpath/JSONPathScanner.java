@@ -1,8 +1,12 @@
 package com.koenv.gpjson.jsonpath;
 
+import java.util.Stack;
+
 public class JSONPathScanner {
     private final String string;
     private int position = -1;
+
+    private final Stack<Integer> markedPositions = new Stack<>();
 
     public JSONPathScanner(String string) {
         this.string = string;
@@ -65,5 +69,13 @@ public class JSONPathScanner {
         char currentChar = this.string.charAt(position + 1);
 
         return new UnsupportedJSONPathException(errorMessage + " at " + (position + 1) + " ('" + currentChar + "')");
+    }
+
+    public void mark() {
+        markedPositions.push(this.position);
+    }
+
+    public void reset() {
+        this.position = markedPositions.pop();
     }
 }

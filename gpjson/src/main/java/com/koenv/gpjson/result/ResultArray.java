@@ -9,22 +9,27 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 
 import java.nio.MappedByteBuffer;
-import java.nio.file.Path;
 
 @ExportLibrary(InteropLibrary.class)
 public class ResultArray implements TruffleObject {
-    private final long numberOfElements;
+    private final long numberOfLines;
+    private final int resultsPerLine;
     private final long[] value;
     private final MappedByteBuffer file;
 
-    public ResultArray(long numberOfLines, long[] value, MappedByteBuffer file) {
-        this.numberOfElements = numberOfLines;
+    public ResultArray(long numberOfLines, int resultsPerLine, long[] value, MappedByteBuffer file) {
+        this.numberOfLines = numberOfLines;
+        this.resultsPerLine = resultsPerLine;
         this.value = value;
         this.file = file;
     }
 
-    public long getNumberOfElements() {
-        return numberOfElements;
+    public long getNumberOfLines() {
+        return numberOfLines;
+    }
+
+    public int getResultsPerLine() {
+        return resultsPerLine;
     }
 
     public long[] getValue() {
@@ -43,27 +48,23 @@ public class ResultArray implements TruffleObject {
     @ExportMessage
     @CompilerDirectives.TruffleBoundary
     public Object readArrayElement(long index) throws UnsupportedMessageException, InvalidArrayIndexException {
-        if (index >= numberOfElements) {
+        if (index >= numberOfLines) {
             throw InvalidArrayIndexException.create(index);
         }
 
-        long valueStart = index * 2;
+        long valueStart = index * 2 * resultsPerLine;
 
-        if (value[(int) valueStart] == -1) {
-            return new ResultItem(this, valueStart, 0);
-        }
-
-        return new ResultItem(this, valueStart, 1);
+        return new ResultItem(this, valueStart, resultsPerLine);
     }
 
     @ExportMessage
     @CompilerDirectives.TruffleBoundary
     public boolean isArrayElementReadable(long index) {
-        return index < numberOfElements;
+        return index < numberOfLines;
     }
 
     @ExportMessage
     public long getArraySize() {
-        return numberOfElements;
+        return numberOfLines;
     }
 }

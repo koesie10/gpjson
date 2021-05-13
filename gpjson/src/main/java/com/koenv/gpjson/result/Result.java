@@ -16,13 +16,15 @@ public class Result implements TruffleObject {
     private final Path filePath;
     private final long numberOfQueries;
     private final long numberOfLines;
+    private final int resultsPerLine;
     private final long[][] value;
     private final MappedByteBuffer file;
 
-    public Result(Path filePath, long numberOfQueries, long numberOfLines, long[][] value, MappedByteBuffer file) {
+    public Result(Path filePath, long numberOfQueries, long numberOfLines, int resultsPerLine, long[][] value, MappedByteBuffer file) {
         this.filePath = filePath;
         this.numberOfQueries = numberOfQueries;
         this.numberOfLines = numberOfLines;
+        this.resultsPerLine = resultsPerLine;
         this.value = value;
         this.file = file;
     }
@@ -55,7 +57,7 @@ public class Result implements TruffleObject {
             throw InvalidArrayIndexException.create(index);
         }
 
-        return new ResultArray(numberOfLines, value[(int) index], file);
+        return new ResultArray(numberOfLines, resultsPerLine, value[(int) index], file);
     }
 
     @ExportMessage

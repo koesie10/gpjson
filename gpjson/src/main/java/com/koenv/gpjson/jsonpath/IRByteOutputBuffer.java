@@ -12,6 +12,11 @@ public class IRByteOutputBuffer {
         this.buffer = new ByteArrayOutputStream();
     }
 
+    public IRByteOutputBuffer writeOpcode(Opcode opcode) {
+        this.writeByte((byte) opcode.ordinal());
+        return this;
+    }
+
     public IRByteOutputBuffer writeByte(byte b) {
         buffer.write(b);
         return this;

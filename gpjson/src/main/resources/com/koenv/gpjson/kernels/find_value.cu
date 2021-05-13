@@ -1,4 +1,7 @@
-__global__ void find_value(char *file, long n, long *new_line_index, long new_line_index_size, long *string_index, long *leveled_bitmaps_index, long leveled_bitmaps_index_size, long level_size, char *query, int query_size, long *result) {
+// Should match with the value in LeveledBitmapsIndex
+#define MAX_NUM_LEVELS 16
+
+__global__ void find_value(char *file, long n, long *new_line_index, long new_line_index_size, long *string_index, long *leveled_bitmaps_index, long leveled_bitmaps_index_size, long level_size, char *query, int result_size, long *result) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
 
@@ -8,52 +11,137 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
   long end = start + lines_per_thread;
 
   for (long i = start; i < end && i < new_line_index_size; i += 1) {
-    result[i*2] = -1;
     long new_line_start = new_line_index[i];
     long new_line_end = (i + 1 < new_line_index_size) ? new_line_index[i+1] : n;
 
     int current_level = 0;
     int query_position = 0;
-    long current_level_end = new_line_end;
+    long level_ends[MAX_NUM_LEVELS];
+    level_ends[0] = new_line_end;
+    for (int j = 1; j < MAX_NUM_LEVELS; j++) {
+      level_ends[j] = -1;
+    }
 
-    char looking_for_type = query[query_position++];
+    int result_index = 0;
 
+    char looking_for_type;
+
+    // Property expression
     int looking_for_length;
     char *looking_for;
 
+    // Index expression
     int looking_for_index;
-    int current_index;
+    int current_index[MAX_NUM_LEVELS];
 
-    switch (looking_for_type) {
-      case 0x01: {// Property expression
-        looking_for_length = 0;
-        int i = 0;
-        int b;
-
-        while (((b = query[query_position++]) & 0x80) != 0) {
-          looking_for_length |= (b & 0x7F) << i;
-          i += 7;
-          assert(i <= 35);
-        }
-        looking_for_length = looking_for_length | (b << i);
-
-        looking_for = query + query_position;
-        query_position += looking_for_length;
-
-        break;
-      }
-      default: {
-        assert(false);
-        break;
-      }
+    for (int i = 0; i < MAX_NUM_LEVELS; i++) {
+      current_index[i] = 0;
     }
 
-    for (long j = new_line_start; j < current_level_end && j < n; j += 1) {
+    bool execute_ir = true;
+
+    for (long j = new_line_start; j < level_ends[current_level] && j < n; j += 1) {
+      while (execute_ir) {
+        looking_for_type = query[query_position++];
+
+        switch (looking_for_type) {
+          case 0x00: { // End
+            goto end_single_line;
+          }
+          case 0x01: { // Store result
+            assert(result_index < result_size);
+
+            int this_result_index = i*2*result_size + result_index*2;
+
+            result[this_result_index] = j;
+            result[this_result_index+1] = level_ends[current_level];
+
+            this_result_index++;
+
+            break;
+          }
+          case 0x02: { // Move up
+            j = level_ends[current_level] + 1;
+
+            current_level--;
+            break;
+          }
+          case 0x03: { // Move down
+            current_level++;
+
+            // Now we need to find the end of the previous level (i.e. current_level - 1), unless we already have one
+            if (level_ends[current_level] == -1) {
+              for (long m = j + 1; m < level_ends[current_level - 1]; m += 1) {
+                bool is_structural = (leveled_bitmaps_index[level_size * (current_level - 1) + m / 64] & (1L << m % 64)) != 0;
+                if (is_structural) {
+                  level_ends[current_level] = m;
+                  break;
+                }
+              }
+            }
+
+            break;
+          }
+          case 0x04: { // Move to key
+            looking_for_length = 0;
+            int i = 0;
+            int b;
+
+            while (((b = query[query_position++]) & 0x80) != 0) {
+              looking_for_length |= (b & 0x7F) << i;
+              i += 7;
+              assert(i <= 35);
+            }
+            looking_for_length = looking_for_length | (b << i);
+
+            looking_for = query + query_position;
+            query_position += looking_for_length;
+
+            execute_ir = false;
+
+            break;
+          }
+          case 0x05: { // Move to index
+            looking_for_index = 0;
+            int i = 0;
+            int b;
+
+            while (((b = query[query_position++]) & 0x80) != 0) {
+              looking_for_index |= (b & 0x7F) << i;
+              i += 7;
+              assert(i <= 35);
+            }
+            looking_for_index = looking_for_index | (b << i);
+
+            if (current_index[current_level] == 0) {
+              char current_character;
+              // Now find the opening `[`
+              while (true) {
+                current_character = file[j];
+                if (current_character == '[') {
+                  break;
+                }
+                assert(current_character == '\n' || current_character == '\r' || current_character == '\t' || current_character == ' ');
+
+                j++;
+                assert(j < n);
+              }
+            }
+
+            execute_ir = false;
+
+            break;
+          }
+          default: {
+            assert(false);
+            break;
+          }
+        }
+      }
+
       bool is_structural = (leveled_bitmaps_index[level_size * current_level + j / 64] & (1L << j % 64)) != 0;
 
-      bool move_to_next_level = false;
-
-      if (looking_for_type == 0x01) {
+      if (looking_for_type == 0x04) {
         if (is_structural && file[j] == ':') {
           // Start looking for the end of the string
           long string_end_index = -1;
@@ -71,109 +159,24 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
             continue;
           }
 
-          move_to_next_level = true;
+          execute_ir = true;
 
           for (long k = 0; k < looking_for_length; k++) {
             if (looking_for[k] != file[string_start_index + k + 1]) {
-              move_to_next_level = false;
+              execute_ir = false;
               break;
             }
           }
         }
-      } else if (looking_for_type == 0x02) {
+      } else if (looking_for_type == 0x05) {
         if (looking_for_index == 0) {
           // This will only happen once
-          move_to_next_level = true;
+          execute_ir = true;
         } else if (is_structural && file[j] == ',') {
-           current_index++;
-           if (looking_for_index == current_index) {
-             move_to_next_level = true;
+           current_index[current_level]++;
+           if (looking_for_index == current_index[current_level]) {
+             execute_ir = true;
            }
-        }
-      }
-
-      if (move_to_next_level) {
-        looking_for_type = query[query_position++];
-
-        switch (looking_for_type) {
-          case 0x00: { // End
-            // +1 because we want to skip the colon/square open bracket
-            result[i*2] = j + 1;
-
-            long value_end;
-            // Now we need to find the end of the value
-            for (value_end = j + 1; value_end < current_level_end; value_end += 1) {
-              bool is_structural = (leveled_bitmaps_index[level_size * current_level + value_end / 64] & (1L << value_end % 64)) != 0;
-              if (is_structural) {
-                break;
-              }
-            }
-
-            result[i*2+1] = value_end;
-
-            goto end_single_line;
-          }
-          case 0x01: { // Property expression
-            looking_for_length = 0;
-            int i = 0;
-            int b;
-
-            while (((b = query[query_position++]) & 0x80) != 0) {
-              looking_for_length |= (b & 0x7F) << i;
-              i += 7;
-              assert(i <= 35);
-            }
-            looking_for_length = looking_for_length | (b << i);
-
-            looking_for = query + query_position;
-            query_position += looking_for_length;
-
-            current_level++;
-
-            break;
-          }
-          case 0x02: { // Index expression
-            looking_for_index = 0;
-            int i = 0;
-            int b;
-
-            while (((b = query[query_position++]) & 0x80) != 0) {
-              looking_for_index |= (b & 0x7F) << i;
-              i += 7;
-              assert(i <= 35);
-            }
-            looking_for_index = looking_for_index | (b << i);
-
-            current_level++;
-            current_index = 0;
-
-            char current_character = file[j];
-            // Now find the opening `[`
-            while (true) {
-              j++;
-              assert(j < n);
-              current_character = file[j];
-              if (current_character == '[') {
-                break;
-              }
-              assert(current_character == '\n' || current_character == '\r' || current_character == '\t' || current_character == ' ');
-            }
-
-            break;
-          }
-          default: {
-            assert(false);
-            break;
-          }
-        }
-
-        // Now we need to find the end of the previous level (i.e. current_level - 1)
-        for (long m = j + 1; m < current_level_end; m += 1) {
-          bool is_structural = (leveled_bitmaps_index[level_size * (current_level - 1) + m / 64] & (1L << m % 64)) != 0;
-          if (is_structural) {
-            current_level_end = m;
-            break;
-          }
         }
       }
     }
