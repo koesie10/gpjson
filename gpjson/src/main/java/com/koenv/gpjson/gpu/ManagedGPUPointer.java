@@ -67,10 +67,6 @@ public class ManagedGPUPointer implements AutoCloseable {
     }
 
     public void setTo(int value) {
-        if (size % 4 != 0) {
-            throw new GPJSONException("Cannot set memory to 0 of non-4-aligned block");
-        }
-
-        cudaRuntime.cudaMemset(pointer.getRawPointer(), value, size / 4);
+        cudaRuntime.cudaMemset(pointer.getRawPointer(), value, size);
     }
 }
