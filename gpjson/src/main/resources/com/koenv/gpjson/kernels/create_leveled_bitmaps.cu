@@ -39,7 +39,13 @@ __global__ void create_leveled_bitmaps(char *file, long n, long *string_index, c
 
       if (value == '{' || value == '[') {
         level++;
+        if (level < num_levels) {
+          leveled_bitmaps_index[level_size * level + i / 64] |= (1L << offsetInBlock);
+        }
       } else if (value == '}' || value == ']') {
+        if (level < num_levels) {
+          leveled_bitmaps_index[level_size * level + i / 64] |= (1L << offsetInBlock);
+        }
         level--;
       } else if ((value == ':' || value == ',') && level >= 0 && level < num_levels) {
         leveled_bitmaps_index[level_size * level + i / 64] |= (1L << offsetInBlock);

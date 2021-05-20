@@ -1,10 +1,7 @@
 package com.koenv.gpjson.function;
 
 import com.koenv.gpjson.GPJSONTest;
-import com.koenv.gpjson.jsonpath.JSONPathException;
-import com.koenv.gpjson.jsonpath.JSONPathParser;
-import com.koenv.gpjson.jsonpath.JSONPathResult;
-import com.koenv.gpjson.jsonpath.JSONPathScanner;
+import com.koenv.gpjson.jsonpath.*;
 import com.koenv.gpjson.sequential.Sequential;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.AfterEach;
@@ -20,8 +17,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QueryFunctionTest extends GPJSONTest {
     @BeforeEach
@@ -37,37 +38,121 @@ public class QueryFunctionTest extends GPJSONTest {
     @Test
     @Disabled("Currently only used for manual testing")
     public void twitterSmall() {
-        System.out.println(context.eval("gpjson", "jsonpath").invokeMember("query", "out/twitter_really_small.ldjson", "$.user.lang"));
+        System.out.println(context.eval("gpjson", "jsonpath").invokeMember("query", "out/twitter_very_small.ldjson", "$.user.values[0:2]"));
     }
 
     @Test
     @Disabled("Currently only used for manual testing")
     public void twitterSmallSequential() throws IOException, JSONPathException {
-        byte[] file = Files.readAllBytes(Paths.get("out/twitter_really_small.ldjson"));
-        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner("$.user.lang")).compile();
+        byte[] file = Files.readAllBytes(Paths.get("out/twitter_very_small.ldjson"));
+        JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner("$.user.values[2]")).compile();
+
+        IRVisitor.accept(compiledQuery.getIr().toReadable(), new PrintingIRVisitor(System.out));
 
         long[] newlineIndex = Sequential.createNewlineIndex(file);
         long[] stringIndex = Sequential.createStringIndex(file);
         long[] leveledBitmapsIndex = Sequential.createLeveledBitmapsIndex(file, stringIndex, compiledQuery.getMaxDepth());
         long[] result = Sequential.findValue(file, newlineIndex, stringIndex, leveledBitmapsIndex, compiledQuery);
 
+        System.out.println(Arrays.toString(result));
+
         StringBuilder returnValue = new StringBuilder();
 
-        for (long value : result) {
-            returnValue.append(value);
+        for (int i = 0; i < result.length; i += 2) {
+            long start = result[i];
+            long end = result[i + 1];
 
-            if (value > -1) {
+            returnValue.append(start);
+
+            if (start > -1) {
                 returnValue.append(": ");
 
-                for (int m = 0; m < 8; m++) {
-                    returnValue.append((char)file[(int) value + m]);
+                for (long m = start; m < end; m++) {
+                    returnValue.append((char) file[(int) m]);
                 }
             }
 
             returnValue.append('\n');
         }
 
+        System.out.println(returnValue);
+
         Files.write(Paths.get("result.json"), returnValue.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void simpleNestedStringProperty() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.user.lang");
+
+        assertEquals(1, values.size());
+        assertEquals("\"nl\"", values.get(0).asString());
+    }
+
+    @Test
+    public void simpleNestedNumberProperty() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.user.id");
+
+        assertEquals(1, values.size());
+        assertEquals("8723", values.get(0).asString());
+    }
+
+    @Test
+    public void simpleNonExistentLeafProperty() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.user.foo");
+
+        assertEquals(1, values.size());
+        assertTrue(values.get(0).isNull());
+    }
+
+    @Test
+    public void simpleNonExistentIntermediateProperty() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.apple.lang");
+
+        assertEquals(1, values.size());
+        assertTrue(values.get(0).isNull());
+    }
+
+    @Test
+    public void simpleNestedZeroIndex() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.user.values[0]");
+
+        assertEquals(1, values.size());
+        assertEquals("\"12\"", values.get(0).asString());
+    }
+
+    @Test
+    public void simpleNestedIndex() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.user.values[2]");
+
+        assertEquals(1, values.size());
+        assertEquals("14", values.get(0).asString());
+    }
+
+    @Test
+    public void simpleNonExistentIndex() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.user.values[8]");
+
+        assertEquals(1, values.size());
+        assertTrue(values.get(0).isNull());
+    }
+
+    @Test
+    public void simpleZeroBasedIndexRange() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.user.values[0:3]");
+
+        assertEquals(3, values.size());
+        assertEquals("\"12\"", values.get(0).asString());
+        assertEquals("\"13\"", values.get(1).asString());
+        assertEquals("14", values.get(2).asString());
+    }
+
+    @Test
+    public void simpleNonZeroBasedIndexRange() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.user.values[2:4]");
+
+        assertEquals(2, values.size());
+        assertEquals("14", values.get(0).asString());
+        assertEquals("\"15\"", values.get(1).asString());
     }
 
     @Test
@@ -84,11 +169,46 @@ public class QueryFunctionTest extends GPJSONTest {
 
                 for (int j = 0; j < path.getArraySize(); j++) {
                     Value line = path.getArrayElement(j);
-                    valueCount += line.getArraySize();
+
+                    for (int k = 0; k < line.getArraySize(); k++) {
+                        Value item = line.getArrayElement(k);
+
+                        if (!item.isNull()) {
+                            valueCount++;
+                        }
+                    }
                 }
             }
 
             assertEquals(0, valueCount);
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    private List<Value> simpleQuery(String file, String query) throws IOException {
+        Path tempFile = createTemporaryFile(file);
+
+        try {
+            Value result = context.eval("gpjson", "jsonpath").invokeMember("query", tempFile.toAbsolutePath().toString(), query);
+
+            List<Value> values = new ArrayList<>();
+
+            for (int i = 0; i < result.getArraySize(); i++) {
+                Value path = result.getArrayElement(i);
+
+                for (int j = 0; j < path.getArraySize(); j++) {
+                    Value line = path.getArrayElement(j);
+
+                    for (int k = 0; k < line.getArraySize(); k++) {
+                        Value item = line.getArrayElement(k);
+
+                        values.add(item);
+                    }
+                }
+            }
+
+            return values;
         } finally {
             Files.deleteIfExists(tempFile);
         }

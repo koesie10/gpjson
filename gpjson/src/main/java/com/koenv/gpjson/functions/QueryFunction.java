@@ -34,6 +34,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class QueryFunction extends Function {
+    private static final boolean DEBUG = false;
+
     private final GPJSONContext context;
 
     public QueryFunction(GPJSONContext context) {
@@ -53,7 +55,9 @@ public class QueryFunction extends Function {
         context.getCudaRuntime().timings.end();
 
         long end = System.nanoTime();
-        System.out.printf("Compiling kernels done in %dms%n", TimeUnit.NANOSECONDS.toMillis(end - start));
+        if (DEBUG) {
+            System.out.printf("Compiling kernels done in %dms%n", TimeUnit.NANOSECONDS.toMillis(end - start));
+        }
 
         context.getCudaRuntime().timings.start("query");
 
@@ -114,8 +118,6 @@ public class QueryFunction extends Function {
             try {
                 JSONPathResult compiledQuery = new JSONPathParser(new JSONPathScanner(query)).compile();
 
-                IRVisitor.accept(compiledQuery.getIr().toReadable(), new PrintingIRVisitor(System.out));
-
                 compiledQueries.add(compiledQuery);
             } catch (UnsupportedJSONPathException e) {
                 if (queryOptions.disableFallback) {
@@ -154,7 +156,9 @@ public class QueryFunction extends Function {
             double durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
             double speed = size / durationSeconds;
 
-            System.out.printf("Reading file done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+            if (DEBUG) {
+                System.out.printf("Reading file done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+            }
 
             start = System.nanoTime();
 
@@ -168,7 +172,9 @@ public class QueryFunction extends Function {
                 durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
                 speed = size / durationSeconds;
 
-                System.out.printf("Creating newline and string index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+                if (DEBUG) {
+                    System.out.printf("Creating newline and string index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+                }
 
                 start = System.nanoTime();
 
@@ -180,7 +186,9 @@ public class QueryFunction extends Function {
                     durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
                     speed = size / durationSeconds;
 
-                    System.out.printf("Creating leveled bitmaps index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+                    if (DEBUG) {
+                        System.out.printf("Creating leveled bitmaps index done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+                    }
 
                     try (
                             ManagedGPUPointer result = context.getCudaRuntime().allocateUnmanagedMemory(newlineIndex.numberOfElements() * 2 * maxNumResults, Type.SINT64);
@@ -225,7 +233,9 @@ public class QueryFunction extends Function {
                             durationSeconds = duration / (double) TimeUnit.SECONDS.toNanos(1);
                             speed = size / durationSeconds;
 
-                            System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+                            if (DEBUG) {
+                                System.out.printf("Finding values done in %dms, %s/second%n", TimeUnit.NANOSECONDS.toMillis(duration), FormatUtil.humanReadableByteCountSI((long) speed));
+                            }
 
                             returnValue[i] = GPUUtils.readLongs(result);
                         }
@@ -250,8 +260,6 @@ public class QueryFunction extends Function {
 
         // query
         context.getCudaRuntime().timings.end();
-
-        System.out.println(Arrays.deepToString(returnValue));
 
         return new Result(file, compiledQueries.size(), numberOfLines, maxNumResults, returnValue, mappedBuffer);
     }

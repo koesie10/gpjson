@@ -1,6 +1,13 @@
 // Should match with the value in LeveledBitmapsIndex
 #define MAX_NUM_LEVELS 16
 
+#define OPCODE_END 0x00
+#define OPCODE_STORE_RESULT 0x01
+#define OPCODE_MOVE_UP 0x02
+#define OPCODE_MOVE_DOWN 0x03
+#define OPCODE_MOVE_TO_KEY 0x04
+#define OPCODE_MOVE_TO_INDEX 0x05
+
 __global__ void find_value(char *file, long n, long *new_line_index, long new_line_index_size, long *string_index, long *leveled_bitmaps_index, long leveled_bitmaps_index_size, long level_size, char *query, int result_size, long *result) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
@@ -34,8 +41,8 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
     int looking_for_index;
     int current_index[MAX_NUM_LEVELS];
 
-    for (int i = 0; i < MAX_NUM_LEVELS; i++) {
-      current_index[i] = 0;
+    for (int j = 0; j < MAX_NUM_LEVELS; j++) {
+      current_index[j] = -1;
     }
 
     bool execute_ir = true;
@@ -45,28 +52,42 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
         looking_for_type = query[query_position++];
 
         switch (looking_for_type) {
-          case 0x00: { // End
+          case OPCODE_END: { // End
             goto end_single_line;
           }
-          case 0x01: { // Store result
+          case OPCODE_STORE_RESULT: { // Store result
             assert(result_index < result_size);
+
+            // If we are storing a result, we are not in a string, so we can safely skip all whitespace
+            // to find the start of the actual value
+            char current_character;
+            while (true) {
+              current_character = file[j];
+              if (current_character != '\n' && current_character != '\r' && current_character != '\t' && current_character != ' ') {
+                  break;
+              }
+
+              j++;
+            }
 
             int this_result_index = i*2*result_size + result_index*2;
 
             result[this_result_index] = j;
             result[this_result_index+1] = level_ends[current_level];
 
-            this_result_index++;
+            result_index++;
 
             break;
           }
-          case 0x02: { // Move up
-            j = level_ends[current_level] + 1;
+          case OPCODE_MOVE_UP: { // Move up
+            j = level_ends[current_level];
+
+            level_ends[current_level] = -1;
 
             current_level--;
             break;
           }
-          case 0x03: { // Move down
+          case OPCODE_MOVE_DOWN: { // Move down
             current_level++;
 
             // Now we need to find the end of the previous level (i.e. current_level - 1), unless we already have one
@@ -82,7 +103,7 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
 
             break;
           }
-          case 0x04: { // Move to key
+          case OPCODE_MOVE_TO_KEY: { // Move to key
             looking_for_length = 0;
             int i = 0;
             int b;
@@ -101,7 +122,7 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
 
             break;
           }
-          case 0x05: { // Move to index
+          case OPCODE_MOVE_TO_INDEX: { // Move to index
             looking_for_index = 0;
             int i = 0;
             int b;
@@ -113,7 +134,7 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
             }
             looking_for_index = looking_for_index | (b << i);
 
-            if (current_index[current_level] == 0) {
+            if (current_index[current_level] == -1) {
               char current_character;
               // Now find the opening `[`
               while (true) {
@@ -126,9 +147,17 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
                 j++;
                 assert(j < n);
               }
+
+              current_index[current_level] = 0;
             }
 
-            execute_ir = false;
+            if (looking_for_index == 0) {
+              j++;
+
+              execute_ir = true;
+            } else {
+              execute_ir = false;
+            }
 
             break;
           }
@@ -141,7 +170,7 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
 
       bool is_structural = (leveled_bitmaps_index[level_size * current_level + j / 64] & (1L << j % 64)) != 0;
 
-      if (looking_for_type == 0x04) {
+      if (looking_for_type == OPCODE_MOVE_TO_KEY) {
         if (is_structural && file[j] == ':') {
           // Start looking for the end of the string
           long string_end_index = -1;
@@ -168,15 +197,12 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
             }
           }
         }
-      } else if (looking_for_type == 0x05) {
-        if (looking_for_index == 0) {
-          // This will only happen once
-          execute_ir = true;
-        } else if (is_structural && file[j] == ',') {
-           current_index[current_level]++;
-           if (looking_for_index == current_index[current_level]) {
-             execute_ir = true;
-           }
+      } else if (looking_for_type == OPCODE_MOVE_TO_INDEX) {
+        if (is_structural && file[j] == ',') {
+          current_index[current_level]++;
+          if (looking_for_index == current_index[current_level]) {
+            execute_ir = true;
+          }
         }
       }
     }

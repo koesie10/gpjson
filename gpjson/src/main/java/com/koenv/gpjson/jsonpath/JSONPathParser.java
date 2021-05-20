@@ -106,6 +106,8 @@ public class JSONPathParser {
 
         scanner.expectChar(']');
 
+        int maxMaxLevel = maxLevel;
+
         for (int i = startIndex; i < endIndex; i++) {
             int startLevel = ir.getCurrentLevel();
 
@@ -114,7 +116,15 @@ public class JSONPathParser {
 
             scanner.mark();
 
-            compileNextExpression();
+            int currentMaxLevel = maxLevel;
+
+            if (scanner.hasNext()) {
+                compileNextExpression();
+            }
+
+            maxMaxLevel = Math.max(maxLevel, maxMaxLevel);
+
+            maxLevel = currentMaxLevel;
 
             if (i == endIndex - 1) {
                 break;
@@ -130,6 +140,8 @@ public class JSONPathParser {
                 ir.up();
             }
         }
+
+        maxLevel = maxMaxLevel + 1;
     }
 
     private void createPropertyIR(String propertyName) {

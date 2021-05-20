@@ -36,7 +36,9 @@ public class JSONPathParserTest {
                 Arguments.of("$['user'][\"lang\"]", new IRBuilder().property("user").down().property("lang").down().storeResult().end().toByteArray(), 2),
                 Arguments.of("$[1]", new IRBuilder().index(1).down().storeResult().end().toByteArray(), 1),
                 Arguments.of("$['us\\'er'][\"lang\"]", new IRBuilder().property("us\\'er").down().property("lang").down().storeResult().end().toByteArray(), 2),
-                Arguments.of("$.categoryPath[1:3].id", new IRBuilder().property("categoryPath").down().index(1).down().property("id").down().storeResult().up().up().index(2).down().property("id").down().storeResult().end().toByteArray(), 3)
+                Arguments.of("$.categoryPath[1:3]", new IRBuilder().property("categoryPath").down().index(1).down().storeResult().up().index(2).down().storeResult().end().toByteArray(), 2),
+                Arguments.of("$.categoryPath[1:3].id", new IRBuilder().property("categoryPath").down().index(1).down().property("id").down().storeResult().up().up().index(2).down().property("id").down().storeResult().end().toByteArray(), 3),
+                Arguments.of("$.categoryPath[1:4].id", new IRBuilder().property("categoryPath").down().index(1).down().property("id").down().storeResult().up().up().index(2).down().property("id").down().storeResult().up().up().index(3).down().property("id").down().storeResult().end().toByteArray(), 3)
         );
     }
 
