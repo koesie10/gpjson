@@ -38,7 +38,12 @@ public class QueryFunctionTest extends GPJSONTest {
     @Test
     @Disabled("Currently only used for manual testing")
     public void twitterSmall() {
-        System.out.println(context.eval("gpjson", "jsonpath").invokeMember("query", "out/twitter_very_small.ldjson", "$.user.values[0:2]"));
+        Value result = context.eval("gpjson", "jsonpath").invokeMember("query", "out/twitter_very_small.ldjson", "$.user.lang");
+        List<Value> values = resultToValues(result);
+
+        assertEquals(1, values.size());
+
+        System.out.println(values.get(0));
     }
 
     @Test
@@ -76,8 +81,6 @@ public class QueryFunctionTest extends GPJSONTest {
         }
 
         System.out.println(returnValue);
-
-        Files.write(Paths.get("result.json"), returnValue.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     @Test
@@ -192,26 +195,30 @@ public class QueryFunctionTest extends GPJSONTest {
         try {
             Value result = context.eval("gpjson", "jsonpath").invokeMember("query", tempFile.toAbsolutePath().toString(), query);
 
-            List<Value> values = new ArrayList<>();
-
-            for (int i = 0; i < result.getArraySize(); i++) {
-                Value path = result.getArrayElement(i);
-
-                for (int j = 0; j < path.getArraySize(); j++) {
-                    Value line = path.getArrayElement(j);
-
-                    for (int k = 0; k < line.getArraySize(); k++) {
-                        Value item = line.getArrayElement(k);
-
-                        values.add(item);
-                    }
-                }
-            }
-
-            return values;
+            return resultToValues(result);
         } finally {
             Files.deleteIfExists(tempFile);
         }
+    }
+
+    private List<Value> resultToValues(Value result)  {
+        List<Value> values = new ArrayList<>();
+
+        for (int i = 0; i < result.getArraySize(); i++) {
+            Value path = result.getArrayElement(i);
+
+            for (int j = 0; j < path.getArraySize(); j++) {
+                Value line = path.getArrayElement(j);
+
+                for (int k = 0; k < line.getArraySize(); k++) {
+                    Value item = line.getArrayElement(k);
+
+                    values.add(item);
+                }
+            }
+        }
+
+        return values;
     }
 
     private Path createTemporaryFile(String name) throws IOException {
