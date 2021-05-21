@@ -93,7 +93,12 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
             // Now we need to find the end of the previous level (i.e. current_level - 1), unless we already have one
             if (level_ends[current_level] == -1) {
               for (long m = j + 1; m < level_ends[current_level - 1]; m += 1) {
-                bool is_structural = (leveled_bitmaps_index[level_size * (current_level - 1) + m / 64] & (1L << m % 64)) != 0;
+                long current_level_index = leveled_bitmaps_index[level_size * (current_level - 1) + m / 64];
+                if (current_level_index == 0) {
+                  m += 64 - (m % 64) - 1;
+                  continue;
+                }
+                bool is_structural = (current_level_index & (1L << m % 64)) != 0;
                 if (is_structural) {
                   level_ends[current_level] = m;
                   break;
@@ -168,7 +173,12 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
         }
       }
 
-      bool is_structural = (leveled_bitmaps_index[level_size * current_level + j / 64] & (1L << j % 64)) != 0;
+      long current_level_index = leveled_bitmaps_index[level_size * current_level + j / 64];
+      if (current_level_index == 0) {
+        j += 64 - (j % 64) - 1;
+        continue;
+      }
+      bool is_structural = (current_level_index & (1L << j % 64)) != 0;
 
       if (looking_for_type == OPCODE_MOVE_TO_KEY) {
         if (is_structural && file[j] == ':') {
