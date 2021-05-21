@@ -226,7 +226,7 @@ public class QueryFunction extends Function {
 
                             start = System.nanoTime();
 
-                            kernel.execute(new Dim3(8), new Dim3(1024), 0, 0, kernelArguments);
+                            kernel.execute(new Dim3(512), new Dim3(1024), 0, 0, kernelArguments);
 
                             end = System.nanoTime();
                             duration = end - start;
