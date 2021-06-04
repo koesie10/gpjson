@@ -15,6 +15,8 @@ public interface IRVisitor {
 
     void visitEnd();
 
+    void visitExpressionStringEquals(String str);
+
     static void accept(byte[] ir, IRVisitor visitor) {
         accept(new IRByteInputBuffer(ByteBuffer.wrap(ir)), visitor);
     }
@@ -40,6 +42,11 @@ public interface IRVisitor {
                 case MOVE_TO_INDEX:
                     visitor.visitIndex(buffer.readVarint());
                     break;
+                case EXPRESSION_STRING_EQUALS:
+                    visitor.visitExpressionStringEquals(buffer.readString());
+                    break;
+                default:
+                    throw new IllegalStateException("Invalid opcode");
             }
         }
     }

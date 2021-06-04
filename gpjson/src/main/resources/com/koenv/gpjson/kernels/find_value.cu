@@ -7,6 +7,7 @@
 #define OPCODE_MOVE_DOWN 0x03
 #define OPCODE_MOVE_TO_KEY 0x04
 #define OPCODE_MOVE_TO_INDEX 0x05
+#define OPCODE_EXPRESSION_STRING_EQUALS 0x06
 
 __global__ void find_value(char *file, long n, long *new_line_index, long new_line_index_size, long *string_index, long *leveled_bitmaps_index, long leveled_bitmaps_index_size, long level_size, char *query, int result_size, long *result) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -162,6 +163,47 @@ __global__ void find_value(char *file, long n, long *new_line_index, long new_li
               execute_ir = true;
             } else {
               execute_ir = false;
+            }
+
+            break;
+          }
+          case OPCODE_EXPRESSION_STRING_EQUALS: {
+            looking_for_length = 0;
+            int i = 0;
+            int b;
+
+            while (((b = query[query_position++]) & 0x80) != 0) {
+              looking_for_length |= (b & 0x7F) << i;
+              i += 7;
+              assert(i <= 35);
+            }
+            looking_for_length = looking_for_length | (b << i);
+
+            looking_for = query + query_position;
+            query_position += looking_for_length;
+
+            // Skip whitespace
+            char current_character;
+            while (true) {
+              current_character = file[j];
+              if (current_character != '\n' && current_character != '\r' && current_character != '\t' && current_character != ' ') {
+                  break;
+              }
+
+              j++;
+            }
+
+            long actual_string_length = level_ends[current_level] - j;
+
+            if (actual_string_length != looking_for_length) {
+              goto end_single_line;
+            }
+
+            for (long k = 0; k < looking_for_length; k++) {
+              if (looking_for[k] != file[j + k]) {
+                goto end_single_line;
+                break;
+              }
             }
 
             break;

@@ -6,5 +6,6 @@ public enum Opcode {
     MOVE_UP,
     MOVE_DOWN,
     MOVE_TO_KEY,
-    MOVE_TO_INDEX
+    MOVE_TO_INDEX,
+    EXPRESSION_STRING_EQUALS
 }

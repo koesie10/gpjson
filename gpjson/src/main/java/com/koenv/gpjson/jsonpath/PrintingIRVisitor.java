@@ -12,12 +12,12 @@ public class PrintingIRVisitor implements IRVisitor {
 
     @Override
     public void visitProperty(String name) {
-        this.printlnf("property %s%n", name);
+        this.printlnf("property %s", name);
     }
 
     @Override
     public void visitIndex(int index) {
-        this.printlnf("index %d%n", index);
+        this.printlnf("index %d", index);
     }
 
     @Override
@@ -42,12 +42,17 @@ public class PrintingIRVisitor implements IRVisitor {
         this.println("end");
     }
 
+    @Override
+    public void visitExpressionStringEquals(String str) {
+        this.printlnf("streq %s", str);
+    }
+
     private void println(String str) {
         this.printStream.println(indent() + str);
     }
 
     private void printlnf(String format, Object... args) {
-        this.printStream.printf(indent() + format, args);
+        this.printStream.printf(indent() + format + "%n", args);
     }
 
     private String indent() {

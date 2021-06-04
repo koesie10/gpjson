@@ -264,8 +264,35 @@ public class Sequential {
                                 }
 
                                 break;
+                            case EXPRESSION_STRING_EQUALS:
+                                lookingForLength = queryBuffer.readVarint();
+                                lookingFor = queryBuffer.readBytes(lookingForLength);
+
+                                // Skip whitespace
+                                while (true) {
+                                    byte currentCharacter = file[j];
+                                    if (currentCharacter != '\n' && currentCharacter != '\r' && currentCharacter != '\t' && currentCharacter != ' ') {
+                                        break;
+                                    }
+
+                                    j++;
+                                }
+
+                                int actualStringLength = levelEnds[currentLevel] - j;
+
+                                if (actualStringLength != lookingForLength) {
+                                    break new_line_loop;
+                                }
+
+                                for (int k = 0; k < lookingForLength; k++) {
+                                    if (lookingFor[k] != file[j + k]) {
+                                        break new_line_loop;
+                                    }
+                                }
+
+                                break;
                             default:
-                                throw new IllegalStateException();
+                                throw new IllegalStateException("Illegal opcode " + lookingForType);
                         }
                     }
 

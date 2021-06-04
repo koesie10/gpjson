@@ -159,6 +159,14 @@ public class QueryFunctionTest extends GPJSONTest {
     }
 
     @Test
+    public void simpleStringEqualsExpression() throws IOException {
+        List<Value> values = simpleQuery("query_gpu_function/simple_single_line.ldjson", "$.user.lang[?(@ == 'nl')]");
+
+        assertEquals(1, values.size());
+        assertEquals("\"nl\"", values.get(0).asString());
+    }
+
+    @Test
     public void keyNotFoundInCurrentLevel() throws IOException {
         Path tempFile = createTemporaryFile("query_gpu_function/not_found_in_current_level.ldjson");
 

@@ -127,7 +127,7 @@ public class QueryFunction extends Function {
                 // If the path is unsupported, we'll fall back to a Java JsonPath implementation
                 return fallbackQuery(file, queries);
             } catch (JSONPathException e) {
-                throw new GPJSONException("Unsupported JSON path (" + i + ")" , e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
+                throw new GPJSONException("Failed to parse JSON path (" + i + ")" , e, AbstractTruffleException.UNLIMITED_STACK_TRACE, null);
             }
         }
 

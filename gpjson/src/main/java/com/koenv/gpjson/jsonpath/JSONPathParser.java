@@ -88,6 +88,8 @@ public class JSONPathParser {
             }
         } else if (scanner.peek() == '*') {
             throw scanner.unsupportedNext("Unsupported wildcard expression");
+        } else if (scanner.peek() == '?') {
+            compileFilterExpression();
         } else {
             throw scanner.errorNext("Unexpected character in index, expected ', \", or an integer");
         }
@@ -142,6 +144,36 @@ public class JSONPathParser {
         }
 
         maxLevel = maxMaxLevel + 1;
+    }
+
+    private void compileFilterExpression() throws JSONPathException {
+        scanner.expectChar('?');
+        scanner.expectChar('(');
+        scanner.expectChar('@');
+
+        while (scanner.skipIfChar(' ')) {
+            // Skip whitespace
+        }
+
+        switch (scanner.peek()) {
+            case '=':
+                scanner.expectChar('=');
+                scanner.expectChar('=');
+
+                while (scanner.skipIfChar(' ')) {
+                    // Skip whitespace
+                }
+
+                String equalTo = readQuotedString();
+
+                ir.expressionStringEquals(equalTo);
+
+                break;
+            default:
+                throw scanner.unsupportedNext("Unsupported character for expression");
+        }
+
+        scanner.expectChar(')');
     }
 
     private void createPropertyIR(String propertyName) {

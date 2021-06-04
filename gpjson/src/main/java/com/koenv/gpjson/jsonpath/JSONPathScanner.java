@@ -47,6 +47,21 @@ public class JSONPathScanner {
         }
     }
 
+    public boolean skipIfChar(char c) throws JSONPathException {
+        if (!hasNext()) {
+            return false;
+        }
+
+        char nextChar = peek();
+        if (c == nextChar) {
+            position++;
+
+            return true;
+        }
+
+        return false;
+    }
+
     public JSONPathException error(String errorMessage) {
         char currentChar = this.string.charAt(position);
 

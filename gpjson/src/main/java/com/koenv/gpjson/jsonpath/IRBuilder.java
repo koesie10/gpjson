@@ -65,6 +65,13 @@ public class IRBuilder {
         return this;
     }
 
+    public IRBuilder expressionStringEquals(String str) {
+        buffer.writeOpcode(Opcode.EXPRESSION_STRING_EQUALS);
+        buffer.writeString("\"" + str + "\"");
+
+        return this;
+    }
+
     public int getCurrentLevel() {
         return currentLevel;
     }
